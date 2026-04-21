@@ -1,0 +1,308 @@
+.census-page {
+  min-height: 100vh;
+  min-height: 100svh;
+  padding: 32px 20px;
+  background:
+    linear-gradient(135deg, rgba(12, 105, 121, 0.08) 0%, rgba(12, 105, 121, 0) 34%),
+    linear-gradient(180deg, #f4f7f8 0%, #eaf0ed 100%);
+}
+
+.census-card {
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid rgba(33, 53, 71, 0.1);
+  box-shadow: 0 24px 70px rgba(33, 53, 71, 0.12);
+}
+
+.census-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+  padding: 28px 32px;
+  color: #ffffff;
+  background:
+    linear-gradient(90deg, rgba(5, 49, 61, 0.96), rgba(12, 105, 121, 0.92)),
+    #0c6979;
+}
+
+.census-logo-wrap {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+}
+
+.census-logo {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+}
+
+.census-heading {
+  min-width: 0;
+}
+
+.census-kicker {
+  margin-bottom: 4px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.census-title {
+  margin: 0 0 6px;
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 800;
+  line-height: 1.05;
+  color: #ffffff;
+}
+
+.census-copy {
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.5;
+}
+
+.census-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  font-size: 0.88rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.census-hero-actions {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
+.census-top-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.census-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f5c84b;
+}
+
+.census-logout.MuiButton-root,
+.census-back-button.MuiButton-root {
+  border-color: rgba(255, 255, 255, 0.34);
+  color: #ffffff;
+  border-radius: 8px;
+  font-weight: 800;
+  text-transform: none;
+}
+
+.census-logout.MuiButton-root:hover,
+.census-back-button.MuiButton-root:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.census-section {
+  display: grid;
+  gap: 18px;
+  padding: 28px 32px;
+  border-bottom: 1px solid rgba(33, 53, 71, 0.09);
+}
+
+.census-alert {
+  padding: 24px 32px 0;
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.section-label {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #183746;
+}
+
+.section-helper {
+  margin: 0;
+  color: #6a7782;
+  font-size: 0.92rem;
+  text-align: right;
+}
+
+.census-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.census-grid-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.census-grid-address {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.census-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding: 24px 32px 32px;
+  background: #fbfcfc;
+}
+
+.census-card .MuiOutlinedInput-root {
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.census-card .MuiInputLabel-root {
+  color: #667582;
+}
+
+.census-card .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline {
+  border-color: #0c6979;
+}
+
+.census-card .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline {
+  border-color: #0c6979;
+  border-width: 2px;
+}
+
+.census-card .MuiInputLabel-root.Mui-focused {
+  color: #0c6979;
+}
+
+.primary-action.MuiButton-root,
+.secondary-action.MuiButton-root {
+  min-width: 132px;
+  border-radius: 8px;
+  font-weight: 800;
+  text-transform: none;
+}
+
+.primary-action.MuiButton-root {
+  background: #0c6979;
+  box-shadow: 0 10px 22px rgba(12, 105, 121, 0.22);
+}
+
+.primary-action.MuiButton-root:hover {
+  background: #084f5d;
+  box-shadow: 0 12px 26px rgba(12, 105, 121, 0.28);
+}
+
+.secondary-action.MuiButton-root {
+  border-color: rgba(33, 53, 71, 0.25);
+  color: #244353;
+  background: #ffffff;
+}
+
+@media (max-width: 900px) {
+  .census-page {
+    padding: 24px 16px;
+  }
+
+  .census-card {
+    border-radius: 8px;
+  }
+
+  .census-hero {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 24px;
+  }
+
+  .census-status {
+    grid-column: 1 / -1;
+    justify-self: flex-start;
+  }
+
+  .census-hero-actions {
+    grid-column: 1 / -1;
+    justify-items: start;
+  }
+
+  .census-top-actions {
+    justify-content: flex-start;
+  }
+
+  .census-section {
+    padding: 24px;
+  }
+
+  .section-heading {
+    display: block;
+  }
+
+  .section-helper {
+    margin-top: 4px;
+    text-align: left;
+  }
+
+  .census-grid-three {
+    grid-template-columns: 1fr;
+  }
+
+  .census-grid-address {
+    grid-template-columns: 1fr;
+  }
+
+  .census-actions {
+    padding: 20px 24px 24px;
+  }
+}
+
+@media (max-width: 560px) {
+  .census-page {
+    padding: 12px;
+  }
+
+  .census-hero {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .census-logo-wrap {
+    width: 62px;
+    height: 62px;
+  }
+
+  .census-logo {
+    width: 50px;
+    height: 50px;
+  }
+
+  .census-actions {
+    flex-direction: column-reverse;
+  }
+
+  .primary-action.MuiButton-root,
+  .secondary-action.MuiButton-root {
+    width: 100%;
+  }
+}

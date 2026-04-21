@@ -1,0 +1,21 @@
+{
+  "name": "barcen-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Monorepo for the Barcen Barangay Census frontend and backend applications.",
+  "scripts": {
+    "postinstall": "npm run install:frontend && npm run install:backend",
+    "install:frontend": "npm install --prefix frontend",
+    "install:backend": "npm install --prefix backend",
+    "install:all": "npm run install:frontend && npm run install:backend",
+    "setup": "npm run install:all",
+    "start": "npm run dev:frontend",
+    "server": "npm run dev:backend",
+    "start:all": "mkdir -p data/db && ./mongodb-macos-x86_64-7.0.5/bin/mongod --dbpath data/db --logpath data/mongod.log --fork && npm run dev:backend & npm run dev:frontend",
+    "doctor": "node scripts/doctor.js",
+    "dev:frontend": "npm --prefix frontend run start",
+    "dev:backend": "npm --prefix backend run dev",
+    "build": "npm --prefix frontend run build",
+    "check:backend": "npm --prefix backend run check"
+  }
+}

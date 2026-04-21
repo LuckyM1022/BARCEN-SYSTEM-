@@ -1,0 +1,236 @@
+.certificate-dialog-content {
+  background: #eef2f7;
+}
+
+.certificate-sheet {
+  margin: 8px auto;
+  padding: 36px 40px 48px;
+  width: min(760px, 100%);
+  background: #ffffff;
+  border: 1px solid #c9d1dc;
+  box-shadow: 0 20px 48px rgba(22, 32, 51, 0.08);
+}
+
+.certificate-header {
+  display: grid;
+  grid-template-columns: 90px 1fr 90px;
+  align-items: center;
+  gap: 16px;
+}
+
+.certificate-header-logo {
+  width: 90px;
+  height: 90px;
+  object-fit: contain;
+}
+
+.certificate-header-text {
+  text-align: center;
+}
+
+.certificate-header-line {
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: #1f2b3d;
+}
+
+.certificate-header-strong {
+  margin-top: 4px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.certificate-header-subtitle {
+  font-weight: 700;
+}
+
+.certificate-rule {
+  margin: 16px 0 22px;
+  border-top: 2px solid #2f3a4c;
+}
+
+.certificate-title {
+  margin-bottom: 30px;
+  text-align: center;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: #111827;
+}
+
+.certificate-body {
+  min-height: 360px;
+}
+
+.certificate-recipient {
+  margin-bottom: 20px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.certificate-paragraph {
+  margin-bottom: 18px;
+  font-size: 1rem;
+  line-height: 1.8;
+  text-align: justify;
+  color: #1f2b3d;
+}
+
+.certificate-signatures {
+  margin-top: 48px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+}
+
+.certificate-signature-block {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.certificate-signature-right {
+  align-items: flex-end;
+}
+
+.certificate-signature-line {
+  margin-bottom: 8px;
+  font-size: 0.95rem;
+  color: #111827;
+}
+
+.certificate-signature-name {
+  font-size: 0.92rem;
+  color: #334155;
+}
+
+@media (max-width: 760px) {
+  .certificate-sheet {
+    padding: 24px 18px 32px;
+  }
+
+  .certificate-header {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .certificate-title {
+    font-size: 1.3rem;
+    letter-spacing: 0.12em;
+  }
+
+  .certificate-signatures {
+    grid-template-columns: 1fr;
+  }
+
+  .certificate-signature-right {
+    align-items: flex-start;
+  }
+}
+
+@media print {
+  @page {
+    size: letter;
+    margin: 0.5in;
+  }
+
+  body {
+    background: #ffffff;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .certificate-print-dialog,
+  .certificate-print-dialog * {
+    visibility: visible;
+  }
+
+  .certificate-print-dialog {
+    position: absolute;
+    inset: 0;
+  }
+
+  .certificate-print-dialog .MuiBackdrop-root,
+  .certificate-print-dialog .MuiDialogActions-root {
+    display: none !important;
+  }
+
+  .certificate-print-dialog .MuiDialog-container {
+    display: block;
+  }
+
+  .certificate-print-dialog .MuiPaper-root {
+    margin: 0 !important;
+    max-width: none !important;
+    width: auto !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  .certificate-dialog-content {
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  .certificate-sheet {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .certificate-header {
+    grid-template-columns: 88px 1fr 88px !important;
+    align-items: center !important;
+    gap: 14px !important;
+  }
+
+  .certificate-header-logo {
+    width: 88px !important;
+    height: 88px !important;
+  }
+
+  .certificate-header-text {
+    text-align: center !important;
+  }
+
+  .certificate-header-line {
+    font-size: 12pt !important;
+    line-height: 1.35 !important;
+  }
+
+  .certificate-header-strong,
+  .certificate-header-subtitle {
+    font-weight: 700 !important;
+  }
+
+  .certificate-title {
+    margin-bottom: 24px !important;
+    font-size: 18pt !important;
+    letter-spacing: 0.18em !important;
+  }
+
+  .certificate-rule {
+    margin: 14px 0 18px !important;
+  }
+
+  .certificate-body {
+    min-height: auto !important;
+  }
+
+  .certificate-paragraph {
+    margin-bottom: 14px !important;
+    font-size: 11pt !important;
+    line-height: 1.65 !important;
+  }
+
+  .certificate-signatures {
+    margin-top: 40px !important;
+  }
+}
