@@ -1,6 +1,10 @@
 import { clearCurrentUser, getAuthToken } from './auth';
 
-const API_BASE_URL = `http://${window.location.hostname}:4000`;
+const configuredApiBaseUrl = process.env.REACT_APP_API_BASE_URL?.trim();
+const API_BASE_URL = (configuredApiBaseUrl || `http://${window.location.hostname}:4000`).replace(
+  /\/$/,
+  ''
+);
 
 export async function apiRequest(path, options = {}) {
   const token = getAuthToken();
