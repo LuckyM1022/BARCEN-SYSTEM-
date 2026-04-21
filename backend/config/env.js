@@ -39,15 +39,27 @@ function loadEnvFile() {
 
 loadEnvFile();
 
+function isAtlasUri(uri = '') {
+  return uri.startsWith('mongodb+srv://');
+}
+
 const fallbackMongoUri = 'mongodb://127.0.0.1:27017';
-const primaryMongoUri = process.env.PRIMARY_MONGODB_URI
-  || process.env.MONGODB_URI
-  || process.env.LOCAL_MONGODB_URI
+const configuredPrimaryMongoUri = process.env.PRIMARY_MONGODB_URI || '';
+const localMongoUri = process.env.LOCAL_MONGODB_URI || '';
+const legacyMongoUri = process.env.MONGODB_URI || '';
+const localFirstMode = Boolean(
+  (configuredPrimaryMongoUri && !isAtlasUri(configuredPrimaryMongoUri))
+  || localMongoUri
+  || (legacyMongoUri && !isAtlasUri(legacyMongoUri))
+);
+const primaryMongoUri = configuredPrimaryMongoUri
+  || localMongoUri
+  || legacyMongoUri
   || process.env.ATLAS_MONGODB_URI
   || fallbackMongoUri;
 const atlasMongoUri = process.env.ATLAS_MONGODB_URI
   || (primaryMongoUri.startsWith('mongodb+srv://') ? primaryMongoUri : '');
-const syncEnabledByDefault = Boolean(atlasMongoUri && atlasMongoUri !== primaryMongoUri);
+const syncEnabledByDefault = Boolean(localFirstMode && atlasMongoUri && atlasMongoUri !== primaryMongoUri);
 
 module.exports = {
   AUTH_SECRET: process.env.AUTH_SECRET || 'barcen-dev-secret-change-me',
@@ -55,6 +67,9 @@ module.exports = {
   ENABLE_ATLAS_SYNC: String(process.env.ENABLE_ATLAS_SYNC || syncEnabledByDefault) === 'true',
   FRONTEND_ORIGIN: process.env.FRONTEND_ORIGIN || '*',
   ATLAS_MONGODB_URI: atlasMongoUri,
+  LEGACY_MONGODB_URI: legacyMongoUri,
+  LOCAL_MONGODB_URI: localMongoUri,
+  LOCAL_FIRST_MODE: localFirstMode,
   PORT: Number(process.env.API_PORT || process.env.PORT || 4000),
   PRIMARY_MONGODB_URI: primaryMongoUri,
   SYNC_INTERVAL_MS: Math.max(5000, Number(process.env.SYNC_INTERVAL_MS || 30000) || 30000),

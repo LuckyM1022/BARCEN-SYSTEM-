@@ -84,11 +84,14 @@ REACT_APP_API_BASE_URL=http://localhost:4000
 API_PORT=4000
 FRONTEND_ORIGIN=http://localhost:3000
 AUTH_SECRET=replace-this-with-a-long-random-string
-MONGODB_URI=mongodb+srv://USERNAME:PASSWORD@CLUSTER.mongodb.net/barcen?retryWrites=true&w=majority&appName=barcen
+MONGODB_URI=mongodb://127.0.0.1:27017
+LOCAL_MONGODB_URI=mongodb://127.0.0.1:27017
+ATLAS_MONGODB_URI=mongodb+srv://USERNAME:PASSWORD@CLUSTER.mongodb.net/barcen?retryWrites=true&w=majority&appName=barcen
+ENABLE_ATLAS_SYNC=true
 MONGODB_DB=barcen
 ```
 
-For another developer's laptop, `MONGODB_URI` is the easiest and safest option. They do not need local MongoDB installed if they are using Atlas.
+For the offline-first setup, local MongoDB is the primary database and Atlas is only the sync target. If the internet is unavailable, the backend keeps writing locally and syncs the queued changes once Atlas becomes reachable again.
 
 ### 3. Configure MongoDB Atlas network access
 
@@ -145,7 +148,8 @@ npm run check:backend
 Check:
 
 - `backend/.env` exists
-- `MONGODB_URI` is set to a reachable MongoDB instance
+- local MongoDB is running if you are using the offline-first setup
+- `MONGODB_URI` or `LOCAL_MONGODB_URI` points to your local MongoDB instance
 - `AUTH_SECRET` is set
 - Atlas IP allowlist includes the machine running the backend
 - Atlas database user credentials are correct
