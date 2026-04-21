@@ -5,8 +5,32 @@ const { createSettingsRepository } = require('./settingsRepository');
 const { createSyncQueueRepository } = require('./syncQueueRepository');
 const { createUsersRepository } = require('./usersRepository');
 
-function createRepositories(db) {
-  const syncQueue = createSyncQueueRepository(db);
+function createNoopSyncQueueRepository() {
+  return {
+    async createIndexes() {},
+    async queueUpsert() {},
+    async queueDelete() {},
+    async remove() {},
+    async markFailed() {},
+    async resetToPending() {},
+    async getStatusCounts() {
+      return {
+        failedCount: 0,
+        pendingCount: 0,
+      };
+    },
+    findFailed() {
+      return [];
+    },
+    findPending() {
+      return [];
+    },
+  };
+}
+
+function createRepositories(db, options = {}) {
+  const { enableSyncQueue = true } = options;
+  const syncQueue = enableSyncQueue ? createSyncQueueRepository(db) : createNoopSyncQueueRepository();
 
   return {
     census: createCensusRepository(db, syncQueue),
