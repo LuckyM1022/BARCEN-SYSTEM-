@@ -1,7 +1,7 @@
-const { AppError } = require('../lib/errors');
-const { publicUser, serializeDocument } = require('../lib/serializers');
-const { hashPassword } = require('../lib/security');
-const { isValidObjectId, sanitizeRolePayload, sanitizeUserPayload } = require('../lib/validators');
+import { AppError } from '../lib/errors.js';
+import { publicUser, serializeDocument } from '../lib/serializers.js';
+import { hashPassword } from '../lib/security.js'
+import { isStrongPassword, isValidObjectId, sanitizeRolePayload, sanitizeUserPayload } from '../lib/validators.js'
 
 function createAdminService(repositories) {
   return {
@@ -16,6 +16,10 @@ function createAdminService(repositories) {
 
       if (!user.name || !user.email || !user.role || !password) {
         throw new AppError(400, 'Name, email, role, and password are required.');
+      }
+
+      if (!isStrongPassword(password)) {
+        throw new AppError(400, 'Password must be at least 8 characters and include 1 uppercase letter, 1 number, and 1 symbol.');
       }
 
       const emailExists = await repositories.users.findByEmail(user.email);
@@ -48,6 +52,10 @@ function createAdminService(repositories) {
       const duplicateUser = await repositories.users.findByEmailExcludingId(updates.email, userId);
       if (duplicateUser) {
         throw new AppError(409, 'Another user already uses that email.');
+      }
+
+      if (password && !isStrongPassword(password)) {
+        throw new AppError(400, 'Password must be at least 8 characters and include 1 uppercase letter, 1 number, and 1 symbol.');
       }
 
       const nextValues = password ? { ...updates, password: await hashPassword(password) } : updates;
@@ -118,6 +126,31 @@ function createAdminService(repositories) {
       return { role: serializeDocument(result) };
     },
 
+    async deleteRole(roleId) {
+      if (!isValidObjectId(roleId)) {
+        throw new AppError(400, 'Invalid role id.');
+      }
+
+      const roles = await repositories.roles.findAll();
+      const role = roles.find((item) => String(item._id) === roleId);
+
+      if (!role) {
+        throw new AppError(404, 'Role not found.');
+      }
+
+      const assignedUsers = await repositories.users.countByRole(role.name);
+      if (assignedUsers > 0) {
+        throw new AppError(409, 'This role is still assigned to one or more users.');
+      }
+
+      const result = await repositories.roles.deleteOne(roleId);
+      if (!result.deletedCount) {
+        throw new AppError(404, 'Role not found.');
+      }
+
+      return { message: 'Role removed.' };
+    },
+
     async getAdminSettings() {
       const settings = await repositories.settings.findByScope('admin');
       return { settings: serializeDocument(settings) };
@@ -136,6 +169,6 @@ function createAdminService(repositories) {
   };
 }
 
-module.exports = {
+export {
   createAdminService,
 };

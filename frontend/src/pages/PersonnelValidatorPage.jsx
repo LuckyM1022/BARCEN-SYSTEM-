@@ -9,43 +9,79 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControlLabel,
   Paper,
   Stack,
-  Switch,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
+  TextField,
   Typography,
 } from '@mui/material';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { apiRequest } from '../api';
-import { clearCurrentUser, getCurrentUser } from '../auth';
+import { clearCurrentUser, getCurrentUser, saveCurrentUser } from '../auth';
+import ConfirmationDialog from '../components/ConfirmationDialog';
 import CensusDashboardShortcut from '../components/CensusDashboardShortcut';
 import barcenLogo from '../resources/Barcen_logo.png';
 import './AdminPage.css';
 
+const formatBirthday = (value) => {
+  if (!value) {
+    return 'Not provided';
+  }
+
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+
+  return parsedDate.toLocaleDateString('en-PH', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+};
+
 function PersonnelValidatorPage() {
+  const rowsPerPage = 5;
   const navigate = useNavigate();
   const location = useLocation();
-  const currentUser = getCurrentUser();
+  const [sessionUser, setSessionUser] = useState(() => getCurrentUser());
   const [stats, setStats] = useState([]);
+  const [dashboardResidents, setDashboardResidents] = useState([]);
+  const [dashboardResidentsTotal, setDashboardResidentsTotal] = useState(0);
+  const [dashboardRecords, setDashboardRecords] = useState([]);
+  const [dashboardRecordsTotal, setDashboardRecordsTotal] = useState(0);
   const [residents, setResidents] = useState([]);
-  const [censusRecords, setCensusRecords] = useState([]);
+  const [residentsTotal, setResidentsTotal] = useState(0);
+  const [residentSearchTerm, setResidentSearchTerm] = useState('');
+  const [reportResidents, setReportResidents] = useState([]);
   const [status, setStatus] = useState({ severity: 'info', message: 'Loading dashboard...' });
   const [activeView, setActiveView] = useState('dashboard');
-  const [settings, setSettings] = useState({
-    autoRefresh: true,
-    reviewLock: true,
-    quickCertificateMode: false,
-  });
   const [settingsStatus, setSettingsStatus] = useState(null);
+  const [profileForm, setProfileForm] = useState({
+    name: sessionUser?.name || '',
+    email: sessionUser?.email || '',
+    phoneNumber: sessionUser?.phoneNumber || '',
+  });
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
   const [residentActionStatus, setResidentActionStatus] = useState(null);
   const [residentPreview, setResidentPreview] = useState(null);
   const [deletingResidentId, setDeletingResidentId] = useState('');
+  const [residentToDelete, setResidentToDelete] = useState(null);
+  const [dashboardResidentsPage, setDashboardResidentsPage] = useState(0);
+  const [dashboardRecordsPage, setDashboardRecordsPage] = useState(0);
+  const [residentsPage, setResidentsPage] = useState(0);
+  const [reportsResidentsPage, setReportsResidentsPage] = useState(0);
+  const visibleStats = stats.filter((stat) => stat.label !== 'Pending Reviews');
 
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
@@ -61,11 +97,27 @@ function PersonnelValidatorPage() {
 
     async function loadValidatorWorkspace() {
       try {
-        const [statsData, residentsData, recordsData, settingsData] = await Promise.all([
+        const residentSearchParams = new URLSearchParams({
+          page: String(residentsPage),
+          pageSize: String(rowsPerPage),
+        });
+
+        if (residentSearchTerm.trim()) {
+          residentSearchParams.set('search', residentSearchTerm.trim());
+        }
+
+        const [
+          statsData,
+          dashboardResidentsData,
+          dashboardRecordsData,
+          residentsData,
+          reportsResidentsData,
+        ] = await Promise.all([
           apiRequest('/api/dashboard/stats'),
-          apiRequest('/api/residents'),
-          apiRequest('/api/census-records'),
-          apiRequest('/api/validator/settings'),
+          apiRequest(`/api/residents?page=${dashboardResidentsPage}&pageSize=${rowsPerPage}`),
+          apiRequest(`/api/census-records?page=${dashboardRecordsPage}&pageSize=${rowsPerPage}`),
+          apiRequest(`/api/residents?${residentSearchParams.toString()}`),
+          apiRequest(`/api/residents?page=${reportsResidentsPage}&pageSize=${rowsPerPage}`),
         ]);
 
         if (cancelled) {
@@ -73,12 +125,13 @@ function PersonnelValidatorPage() {
         }
 
         setStats(statsData.stats);
-        setResidents(residentsData.residents);
-        setCensusRecords(recordsData.records);
-        setSettings((current) => ({
-          ...current,
-          ...(settingsData.settings || {}),
-        }));
+        setDashboardResidents(dashboardResidentsData.residents || []);
+        setDashboardResidentsTotal(dashboardResidentsData.totalCount || 0);
+        setDashboardRecords(dashboardRecordsData.records || []);
+        setDashboardRecordsTotal(dashboardRecordsData.totalCount || 0);
+        setResidents(residentsData.residents || []);
+        setResidentsTotal(residentsData.totalCount || 0);
+        setReportResidents(reportsResidentsData.residents || []);
         setStatus(null);
       } catch (error) {
         if (!cancelled) {
@@ -88,62 +141,97 @@ function PersonnelValidatorPage() {
     }
 
     loadValidatorWorkspace();
-    const intervalId = window.setInterval(loadValidatorWorkspace, settings.autoRefresh ? 5000 : 15000);
+    const intervalId = activeView === 'settings'
+      ? null
+      : window.setInterval(loadValidatorWorkspace, 5000);
 
     return () => {
       cancelled = true;
-      window.clearInterval(intervalId);
+      if (intervalId) {
+        window.clearInterval(intervalId);
+      }
     };
-  }, [settings.autoRefresh]);
+  }, [
+    activeView,
+    dashboardRecordsPage,
+    dashboardResidentsPage,
+    reportsResidentsPage,
+    residentSearchTerm,
+    residentsPage,
+  ]);
 
   const reportSummary = useMemo(() => ({
-    totalResidents: residents.length,
-    totalSubmissions: censusRecords.length,
-    latestResidents: residents.slice(0, 5),
-    latestRecords: censusRecords.slice(0, 5),
-  }), [censusRecords, residents]);
+    totalResidents: residentsTotal,
+    totalSubmissions: dashboardRecordsTotal,
+  }), [dashboardRecordsTotal, residentsTotal]);
 
-  const handleSettingToggle = (event) => {
-    const { name, checked } = event.target;
-    setSettingsStatus(null);
-    setSettings((current) => ({
-      ...current,
-      [name]: checked,
-    }));
-  };
+  useEffect(() => {
+    setDashboardResidentsPage((current) => Math.min(current, Math.max(0, Math.ceil(dashboardResidentsTotal / rowsPerPage) - 1)));
+    setDashboardRecordsPage((current) => Math.min(current, Math.max(0, Math.ceil(dashboardRecordsTotal / rowsPerPage) - 1)));
+    setResidentsPage((current) => Math.min(current, Math.max(0, Math.ceil(residentsTotal / rowsPerPage) - 1)));
+    setReportsResidentsPage((current) => Math.min(current, Math.max(0, Math.ceil(residentsTotal / rowsPerPage) - 1)));
+  }, [dashboardRecordsTotal, dashboardResidentsTotal, residentsTotal]);
 
-  const handleSettingsSave = async () => {
+  useEffect(() => {
+    setProfileForm({
+      name: sessionUser?.name || '',
+      email: sessionUser?.email || '',
+      phoneNumber: sessionUser?.phoneNumber || '',
+    });
+  }, [sessionUser]);
+
+  const handleProfileSave = async () => {
     try {
-      const data = await apiRequest('/api/validator/settings', {
+      const data = await apiRequest('/api/auth/profile', {
         method: 'PUT',
-        body: JSON.stringify(settings),
+        body: JSON.stringify(profileForm),
       });
-      setSettings((current) => ({
-        ...current,
-        ...(data.settings || {}),
-      }));
-      setSettingsStatus({ severity: 'success', message: 'Validator settings saved.' });
+      saveCurrentUser(data.user, data.token);
+      setSessionUser(data.user);
+      setSettingsStatus({ severity: 'success', message: 'Your account details were updated.' });
     } catch (error) {
       setSettingsStatus({ severity: 'error', message: error.message });
     }
   };
 
-  const handleResidentDelete = async (residentId) => {
-    if (!window.confirm('Are you sure you want to delete this resident?')) {
+  const handlePasswordSave = async () => {
+    try {
+      const data = await apiRequest('/api/auth/password', {
+        method: 'PUT',
+        body: JSON.stringify(passwordForm),
+      });
+      setPasswordForm({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      });
+      setSettingsStatus({ severity: 'success', message: data.message || 'Password updated successfully.' });
+    } catch (error) {
+      setSettingsStatus({ severity: 'error', message: error.message });
+    }
+  };
+
+  const handleResidentDelete = async () => {
+    if (!residentToDelete?.id) {
       return;
     }
 
     setResidentActionStatus(null);
-    setDeletingResidentId(residentId);
+    setDeletingResidentId(residentToDelete.id);
 
     try {
-      await apiRequest(`/api/residents/${residentId}`, { method: 'DELETE' });
-      setResidents((current) => current.filter((resident) => resident.id !== residentId));
+      await apiRequest(`/api/residents/${residentToDelete.id}`, { method: 'DELETE' });
+      setDashboardResidents((current) => current.filter((resident) => resident.id !== residentToDelete.id));
+      setResidents((current) => current.filter((resident) => resident.id !== residentToDelete.id));
+      setReportResidents((current) => current.filter((resident) => resident.id !== residentToDelete.id));
+      setDashboardResidentsTotal((current) => Math.max(0, current - 1));
+      setResidentsTotal((current) => Math.max(0, current - 1));
       setResidentActionStatus({ severity: 'success', message: 'Resident removed.' });
     } catch (error) {
       setResidentActionStatus({ severity: 'error', message: error.message });
     } finally {
       setDeletingResidentId('');
+      setResidentToDelete(null);
     }
   };
 
@@ -185,7 +273,7 @@ function PersonnelValidatorPage() {
             >
               Settings
             </Button>
-            {currentUser?.role === 'Admin' && (
+            {sessionUser?.role === 'Admin' && (
               <Button component={RouterLink} to="/admin" variant="text">
                 Admin Page
               </Button>
@@ -210,11 +298,11 @@ function PersonnelValidatorPage() {
               </Typography>
             </Box>
             <Box className="admin-user">
-              <Avatar className="admin-avatar">{currentUser?.name?.charAt(0) || 'V'}</Avatar>
+              <Avatar className="admin-avatar">{sessionUser?.name?.charAt(0) || 'V'}</Avatar>
               <Box>
-                <Typography className="admin-user-name">{currentUser?.name || 'Validator User'}</Typography>
+                <Typography className="admin-user-name">{sessionUser?.name || 'Validator User'}</Typography>
                 <Typography className="admin-user-role">
-                  {currentUser?.role || 'Personnel and Validation Officer'}
+                  {sessionUser?.role || 'Personnel and Validation Officer'}
                 </Typography>
               </Box>
             </Box>
@@ -227,7 +315,7 @@ function PersonnelValidatorPage() {
           )}
 
           <Box className="admin-stats">
-            {stats.map((stat) => (
+            {visibleStats.map((stat) => (
               <Paper key={stat.label} className="admin-stat-card" elevation={0}>
                 <Typography className="admin-stat-label">{stat.label}</Typography>
                 <Typography className="admin-stat-value">{stat.value}</Typography>
@@ -244,7 +332,7 @@ function PersonnelValidatorPage() {
                     <Typography variant="h6" className="admin-panel-title">
                       Live Residents Feed
                     </Typography>
-                    <Chip label={settings.autoRefresh ? 'Auto refresh on' : 'Auto refresh off'} size="small" />
+                    <Chip label="Live sync every 5s" size="small" />
                   </Box>
                   <TableContainer>
                     <Table>
@@ -256,14 +344,14 @@ function PersonnelValidatorPage() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {reportSummary.latestResidents.map((resident) => (
+                        {dashboardResidents.map((resident) => (
                           <TableRow key={resident.id}>
                             <TableCell>{resident.name}</TableCell>
                             <TableCell>{resident.address}</TableCell>
                             <TableCell>{resident.submittedBy}</TableCell>
                           </TableRow>
                         ))}
-                        {reportSummary.latestResidents.length === 0 && (
+                        {dashboardResidents.length === 0 && (
                           <TableRow>
                             <TableCell colSpan={3} className="admin-empty-state">
                               No residents found yet.
@@ -273,6 +361,14 @@ function PersonnelValidatorPage() {
                       </TableBody>
                     </Table>
                   </TableContainer>
+                  <TablePagination
+                    component="div"
+                    count={dashboardResidentsTotal}
+                    page={dashboardResidentsPage}
+                    onPageChange={(event, nextPage) => setDashboardResidentsPage(nextPage)}
+                    rowsPerPage={rowsPerPage}
+                    rowsPerPageOptions={[rowsPerPage]}
+                  />
                 </Paper>
 
                 <Paper className="admin-panel admin-panel-wide" elevation={0}>
@@ -295,7 +391,7 @@ function PersonnelValidatorPage() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {reportSummary.latestRecords.map((record) => (
+                        {dashboardRecords.map((record) => (
                           <TableRow key={record.id}>
                             <TableCell>{[record.firstName, record.lastName].filter(Boolean).join(' ')}</TableCell>
                             <TableCell>{record.area}</TableCell>
@@ -303,7 +399,7 @@ function PersonnelValidatorPage() {
                             <TableCell>{new Date(record.createdAt).toLocaleString()}</TableCell>
                           </TableRow>
                         ))}
-                        {reportSummary.latestRecords.length === 0 && (
+                        {dashboardRecords.length === 0 && (
                           <TableRow>
                             <TableCell colSpan={4} className="admin-empty-state">
                               No census submissions yet.
@@ -313,6 +409,14 @@ function PersonnelValidatorPage() {
                       </TableBody>
                     </Table>
                   </TableContainer>
+                  <TablePagination
+                    component="div"
+                    count={dashboardRecordsTotal}
+                    page={dashboardRecordsPage}
+                    onPageChange={(event, nextPage) => setDashboardRecordsPage(nextPage)}
+                    rowsPerPage={rowsPerPage}
+                    rowsPerPageOptions={[rowsPerPage]}
+                  />
                 </Paper>
               </Stack>
             )}
@@ -326,7 +430,7 @@ function PersonnelValidatorPage() {
                     </Typography>
                     <Box className="admin-panel-tools">
                       <Chip label="Shared with admin instantly" size="small" />
-                      <CensusDashboardShortcut canAccess={['Admin', 'Personnel / Validator', 'Census Taker'].includes(currentUser?.role)} />
+                      <CensusDashboardShortcut canAccess={['Admin', 'Personnel / Validator', 'Census Taker'].includes(sessionUser?.role)} />
                     </Box>
                   </Box>
                   <Typography className="admin-copy">
@@ -335,9 +439,21 @@ function PersonnelValidatorPage() {
                 </Paper>
 
                 <Paper className="admin-panel admin-panel-wide" elevation={0}>
-                  <Typography variant="h6" className="admin-panel-title">
-                    Resident Records
-                  </Typography>
+                  <Box className="admin-panel-header">
+                    <Typography variant="h6" className="admin-panel-title">
+                      Resident Records
+                    </Typography>
+                    <TextField
+                      size="small"
+                      className="admin-search"
+                      label="Search residents"
+                      value={residentSearchTerm}
+                      onChange={(event) => {
+                        setResidentSearchTerm(event.target.value);
+                        setResidentsPage(0);
+                      }}
+                    />
+                  </Box>
 
                   {residentActionStatus && (
                     <Alert severity={residentActionStatus.severity} className="admin-alert">
@@ -350,6 +466,7 @@ function PersonnelValidatorPage() {
                       <TableHead>
                         <TableRow>
                           <TableCell>Resident</TableCell>
+                          <TableCell>Birthday</TableCell>
                           <TableCell>Address</TableCell>
                           <TableCell>Submitted By</TableCell>
                           <TableCell>Actions</TableCell>
@@ -359,6 +476,7 @@ function PersonnelValidatorPage() {
                         {residents.map((resident) => (
                           <TableRow key={resident.id}>
                             <TableCell>{resident.name}</TableCell>
+                            <TableCell>{formatBirthday(resident.birthday)}</TableCell>
                             <TableCell>{resident.address}</TableCell>
                             <TableCell>{resident.submittedBy}</TableCell>
                             <TableCell>
@@ -375,7 +493,7 @@ function PersonnelValidatorPage() {
                                   variant="text"
                                   color="error"
                                   disabled={deletingResidentId === resident.id}
-                                  onClick={() => handleResidentDelete(resident.id)}
+                                  onClick={() => setResidentToDelete(resident)}
                                 >
                                   {deletingResidentId === resident.id ? 'Removing...' : 'Remove'}
                                 </Button>
@@ -386,6 +504,14 @@ function PersonnelValidatorPage() {
                       </TableBody>
                     </Table>
                   </TableContainer>
+                  <TablePagination
+                    component="div"
+                    count={residentsTotal}
+                    page={residentsPage}
+                    onPageChange={(event, nextPage) => setResidentsPage(nextPage)}
+                    rowsPerPage={rowsPerPage}
+                    rowsPerPageOptions={[rowsPerPage]}
+                  />
                 </Paper>
               </Stack>
             )}
@@ -425,7 +551,7 @@ function PersonnelValidatorPage() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {reportSummary.latestResidents.map((resident) => (
+                        {reportResidents.map((resident) => (
                           <TableRow key={resident.id}>
                             <TableCell>{resident.name}</TableCell>
                             <TableCell>{resident.address}</TableCell>
@@ -435,87 +561,109 @@ function PersonnelValidatorPage() {
                       </TableBody>
                     </Table>
                   </TableContainer>
+                  <TablePagination
+                    component="div"
+                    count={residentsTotal}
+                    page={reportsResidentsPage}
+                    onPageChange={(event, nextPage) => setReportsResidentsPage(nextPage)}
+                    rowsPerPage={rowsPerPage}
+                    rowsPerPageOptions={[rowsPerPage]}
+                  />
                 </Paper>
               </Stack>
             )}
 
             {activeView === 'settings' && (
-              <Paper className="admin-panel admin-panel-wide" elevation={0}>
-                <Box className="admin-panel-header">
-                  <Typography variant="h6" className="admin-panel-title">
-                    Validator Settings
-                  </Typography>
-                  <Button variant="contained" onClick={handleSettingsSave}>Save Changes</Button>
-                </Box>
-
-                {settingsStatus && (
-                  <Alert severity={settingsStatus.severity} className="admin-alert">
-                    {settingsStatus.message}
-                  </Alert>
-                )}
-
-                <Stack spacing={2.5} className="admin-settings-list">
-                  <Box className="admin-setting-row">
-                    <Box>
-                      <Typography className="admin-setting-title">Auto Refresh</Typography>
-                      <Typography className="admin-setting-copy">
-                        Keep dashboard cards and tables synced from the server automatically.
-                      </Typography>
-                    </Box>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={settings.autoRefresh}
-                          onChange={handleSettingToggle}
-                          name="autoRefresh"
-                        />
-                      }
-                      label={settings.autoRefresh ? 'Enabled' : 'Disabled'}
-                      labelPlacement="start"
-                    />
+              <Stack spacing={2.5}>
+                <Paper className="admin-panel admin-panel-wide" elevation={0}>
+                  <Box className="admin-panel-header">
+                    <Typography variant="h6" className="admin-panel-title">
+                      My Account
+                    </Typography>
+                    <Button variant="contained" onClick={handleProfileSave}>Save Details</Button>
                   </Box>
 
-                  <Box className="admin-setting-row">
-                    <Box>
-                      <Typography className="admin-setting-title">Review Lock</Typography>
-                      <Typography className="admin-setting-copy">
-                        Hold certificates until a validator finishes checking resident details.
-                      </Typography>
-                    </Box>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={settings.reviewLock}
-                          onChange={handleSettingToggle}
-                          name="reviewLock"
-                        />
-                      }
-                      label={settings.reviewLock ? 'Enabled' : 'Disabled'}
-                      labelPlacement="start"
+                  {settingsStatus && (
+                    <Alert severity={settingsStatus.severity} className="admin-alert">
+                      {settingsStatus.message}
+                    </Alert>
+                  )}
+
+                  <Stack spacing={2.5} className="admin-settings-list">
+                    <TextField
+                      fullWidth
+                      label="Full name"
+                      value={profileForm.name}
+                      onChange={(event) => {
+                        setSettingsStatus(null);
+                        setProfileForm((current) => ({ ...current, name: event.target.value }));
+                      }}
                     />
+                    <TextField
+                      fullWidth
+                      label="Email"
+                      type="email"
+                      value={profileForm.email}
+                      onChange={(event) => {
+                        setSettingsStatus(null);
+                        setProfileForm((current) => ({ ...current, email: event.target.value }));
+                      }}
+                    />
+                    <TextField
+                      fullWidth
+                      label="Phone number"
+                      value={profileForm.phoneNumber}
+                      onChange={(event) => {
+                        setSettingsStatus(null);
+                        setProfileForm((current) => ({ ...current, phoneNumber: event.target.value }));
+                      }}
+                    />
+                  </Stack>
+                </Paper>
+
+                <Paper className="admin-panel admin-panel-wide" elevation={0}>
+                  <Box className="admin-panel-header">
+                    <Typography variant="h6" className="admin-panel-title">
+                      Change My Password
+                    </Typography>
+                    <Button variant="contained" onClick={handlePasswordSave}>Update Password</Button>
                   </Box>
 
-                  <Box className="admin-setting-row">
-                    <Box>
-                      <Typography className="admin-setting-title">Quick Certificate Mode</Typography>
-                      <Typography className="admin-setting-copy">
-                        Show faster document actions for residents already validated.
-                      </Typography>
-                    </Box>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={settings.quickCertificateMode}
-                          onChange={handleSettingToggle}
-                          name="quickCertificateMode"
-                        />
-                      }
-                      label={settings.quickCertificateMode ? 'Enabled' : 'Disabled'}
-                      labelPlacement="start"
+                  <Stack spacing={2.5} className="admin-settings-list">
+                    <TextField
+                      fullWidth
+                      label="Current password"
+                      type="password"
+                      value={passwordForm.currentPassword}
+                      onChange={(event) => {
+                        setSettingsStatus(null);
+                        setPasswordForm((current) => ({ ...current, currentPassword: event.target.value }));
+                      }}
                     />
-                  </Box>
-                </Stack>
-              </Paper>
+                    <TextField
+                      fullWidth
+                      label="New password"
+                      type="password"
+                      helperText="Use at least 8 characters with 1 uppercase letter, 1 number, and 1 symbol."
+                      value={passwordForm.newPassword}
+                      onChange={(event) => {
+                        setSettingsStatus(null);
+                        setPasswordForm((current) => ({ ...current, newPassword: event.target.value }));
+                      }}
+                    />
+                    <TextField
+                      fullWidth
+                      label="Confirm new password"
+                      type="password"
+                      value={passwordForm.confirmPassword}
+                      onChange={(event) => {
+                        setSettingsStatus(null);
+                        setPasswordForm((current) => ({ ...current, confirmPassword: event.target.value }));
+                      }}
+                    />
+                  </Stack>
+                </Paper>
+              </Stack>
             )}
           </Box>
         </section>
@@ -528,6 +676,10 @@ function PersonnelValidatorPage() {
             <Box>
               <Typography className="admin-detail-label">Resident</Typography>
               <Typography className="admin-detail-value">{residentPreview?.name}</Typography>
+            </Box>
+            <Box>
+              <Typography className="admin-detail-label">Birthday</Typography>
+              <Typography className="admin-detail-value">{formatBirthday(residentPreview?.birthday)}</Typography>
             </Box>
             <Box>
               <Typography className="admin-detail-label">Address</Typography>
@@ -543,6 +695,16 @@ function PersonnelValidatorPage() {
           <Button onClick={() => setResidentPreview(null)}>Close</Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmationDialog
+        open={Boolean(residentToDelete)}
+        title="Remove Resident"
+        message={`Are you sure you want to remove ${residentToDelete?.name || 'this resident'}?`}
+        confirmLabel="Remove"
+        loading={Boolean(residentToDelete) && deletingResidentId === residentToDelete?.id}
+        onClose={() => setResidentToDelete(null)}
+        onConfirm={handleResidentDelete}
+      />
     </main>
   );
 }

@@ -1,5 +1,9 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 function loadEnvFile() {
   const envPaths = [
@@ -61,16 +65,18 @@ const atlasMongoUri = process.env.ATLAS_MONGODB_URI
   || (primaryMongoUri.startsWith('mongodb+srv://') ? primaryMongoUri : '');
 const syncEnabledByDefault = Boolean(localFirstMode && atlasMongoUri && atlasMongoUri !== primaryMongoUri);
 
-module.exports = {
-  AUTH_SECRET: process.env.AUTH_SECRET || 'barcen-dev-secret-change-me',
-  DB_NAME: process.env.MONGODB_DB || 'barcen',
-  ENABLE_ATLAS_SYNC: String(process.env.ENABLE_ATLAS_SYNC || syncEnabledByDefault) === 'true',
-  FRONTEND_ORIGIN: process.env.FRONTEND_ORIGIN || '*',
-  ATLAS_MONGODB_URI: atlasMongoUri,
-  LEGACY_MONGODB_URI: legacyMongoUri,
-  LOCAL_MONGODB_URI: localMongoUri,
-  LOCAL_FIRST_MODE: localFirstMode,
-  PORT: Number(process.env.API_PORT || process.env.PORT || 4000),
-  PRIMARY_MONGODB_URI: primaryMongoUri,
-  SYNC_INTERVAL_MS: Math.max(5000, Number(process.env.SYNC_INTERVAL_MS || 30000) || 30000),
-};
+export const AUTH_SECRET = process.env.AUTH_SECRET || 'barcen-dev-secret-change-me';
+export const DB_NAME = process.env.MONGODB_DB || 'barcen';
+export const ENABLE_ATLAS_SYNC =
+  String(process.env.ENABLE_ATLAS_SYNC || syncEnabledByDefault) === 'true';
+export const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || '*';
+export const ATLAS_MONGODB_URI = atlasMongoUri;
+export const LEGACY_MONGODB_URI = legacyMongoUri;
+export const LOCAL_MONGODB_URI = localMongoUri;
+export const LOCAL_FIRST_MODE = localFirstMode;
+export const PORT = Number(process.env.API_PORT || process.env.PORT || 4000);
+export const PRIMARY_MONGODB_URI = primaryMongoUri;
+export const SYNC_INTERVAL_MS = Math.max(
+  5000,
+  Number(process.env.SYNC_INTERVAL_MS || 30000) || 30000
+);

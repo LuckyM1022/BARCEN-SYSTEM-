@@ -1,13 +1,12 @@
-const { AppError } = require('../lib/errors');
-const { publicUser } = require('../lib/serializers');
-const { isValidObjectId } = require('../lib/validators');
-const {
-  createAuthToken,
-  hashPassword,
-  isPasswordHashed,
-  verifyAuthToken,
-  verifyPassword,
-} = require('../lib/security');
+
+import { AppError } from '../lib/errors.js';
+import { publicUser } from '../lib/serializers.js';
+import { isStrongPassword, isValidObjectId, sanitizeUserPayload } from '../lib/validators.js'
+import { createAuthToken,
+          hashPassword,
+          isPasswordHashed,
+          verifyAuthToken,
+          verifyPassword } from '../lib/security.js'
 
 function createAuthService(repositories, authSecret) {
   return {
@@ -112,6 +111,10 @@ function createAuthService(repositories, authSecret) {
         throw new AppError(400, 'Password and confirm password do not match.');
       }
 
+      if (!isStrongPassword(payload.password)) {
+        throw new AppError(400, 'Password must be at least 8 characters and include 1 uppercase letter, 1 number, and 1 symbol.');
+      }
+
       const email = String(payload.email).toLowerCase();
       const existingUser = await repositories.users.findByEmail(email);
 
@@ -136,9 +139,79 @@ function createAuthService(repositories, authSecret) {
         user: safeUser,
       };
     },
+
+    async updateProfile(currentUser, body) {
+      if (!currentUser?.id || !isValidObjectId(currentUser.id)) {
+        throw new AppError(401, 'Authentication required.');
+      }
+
+      const updates = sanitizeUserPayload({
+        ...body,
+        role: currentUser.role,
+      });
+
+      if (!updates.name || !updates.email) {
+        throw new AppError(400, 'Name and email are required.');
+      }
+
+      const duplicateUser = await repositories.users.findByEmailExcludingId(updates.email, currentUser.id);
+      if (duplicateUser) {
+        throw new AppError(409, 'Another user already uses that email.');
+      }
+
+      const result = await repositories.users.updateOne(currentUser.id, updates);
+
+      if (!result) {
+        throw new AppError(404, 'User not found.');
+      }
+
+      const safeUser = publicUser(result);
+
+      return {
+        token: createAuthToken(safeUser, authSecret),
+        user: safeUser,
+      };
+    },
+
+    async updatePassword(currentUser, body) {
+      if (!currentUser?.id || !isValidObjectId(currentUser.id)) {
+        throw new AppError(401, 'Authentication required.');
+      }
+
+      const currentPassword = String(body.currentPassword || '');
+      const newPassword = String(body.newPassword || '');
+      const confirmPassword = String(body.confirmPassword || '');
+
+      if (!currentPassword || !newPassword || !confirmPassword) {
+        throw new AppError(400, 'Current password, new password, and confirm password are required.');
+      }
+
+      if (newPassword !== confirmPassword) {
+        throw new AppError(400, 'New password and confirm password do not match.');
+      }
+
+      if (!isStrongPassword(newPassword)) {
+        throw new AppError(400, 'Password must be at least 8 characters and include 1 uppercase letter, 1 number, and 1 symbol.');
+      }
+
+      const user = await repositories.users.findById(currentUser.id);
+
+      if (!user) {
+        throw new AppError(404, 'User not found.');
+      }
+
+      if (!(await verifyPassword(currentPassword, user.password))) {
+        throw new AppError(400, 'Current password is incorrect.');
+      }
+
+      const hashedPassword = await hashPassword(newPassword);
+      await repositories.users.updateOne(currentUser.id, { password: hashedPassword });
+
+      return { message: 'Password updated successfully.' };
+    },
   };
 }
 
-module.exports = {
+export {
   createAuthService,
 };

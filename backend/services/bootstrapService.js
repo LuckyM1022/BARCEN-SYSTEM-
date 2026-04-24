@@ -1,11 +1,5 @@
-const {
-  demoAdminSettings,
-  demoResidents,
-  demoRoles,
-  demoUsers,
-  demoValidatorSettings,
-} = require('../lib/demoData');
-const { hashPassword, isPasswordHashed } = require('../lib/security');
+import { demoAdminSettings, demoResidents, demoRoles, demoUsers, demoValidatorSettings } from '../lib/demoData.js'
+import { hashPassword, isPasswordHashed } from '../lib/security.js'
 
 function createBootstrapService(repositories) {
   return {
@@ -62,9 +56,10 @@ function createBootstrapService(repositories) {
         await repositories.users.updatePassword(user._id, await hashPassword(user.password || 'changeme123'));
       }));
     },
+
   };
 }
 
-module.exports = {
+export {
   createBootstrapService,
 };

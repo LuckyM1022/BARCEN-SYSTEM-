@@ -1,4 +1,4 @@
-const { ObjectId } = require('mongodb');
+import { ObjectId } from 'mongodb';
 
 function createResidentsRepository(db, syncQueue) {
   const collection = db.collection('residents');
@@ -22,6 +22,12 @@ function createResidentsRepository(db, syncQueue) {
 
       return result;
     },
+    async markAtlasSynced(residentId, syncedAt = new Date()) {
+      await collection.updateOne(
+        { _id: new ObjectId(residentId) },
+        { $set: { atlasSyncedAt: syncedAt } }
+      );
+    },
     insertMany(residents) {
       return collection.insertMany(residents);
     },
@@ -38,6 +44,6 @@ function createResidentsRepository(db, syncQueue) {
   };
 }
 
-module.exports = {
+export {
   createResidentsRepository,
 };

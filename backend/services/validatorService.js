@@ -1,4 +1,4 @@
-const { serializeDocument } = require('../lib/serializers');
+import { serializeDocument } from '../lib/serializers.js';
 
 function createValidatorService(repositories) {
   return {
@@ -20,6 +20,6 @@ function createValidatorService(repositories) {
   };
 }
 
-module.exports = {
+export {
   createValidatorService,
 };

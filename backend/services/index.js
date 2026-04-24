@@ -1,22 +1,26 @@
-const { createAdminService } = require('./adminService');
-const { createAuthService } = require('./authService');
-const { createBootstrapService } = require('./bootstrapService');
-const { createDashboardService } = require('./dashboardService');
-const { createResidentService } = require('./residentService');
-const { createValidatorService } = require('./validatorService');
+import { createAdminService } from './adminService.js'
+import { createAuthService } from './authService.js';
+import { createBootstrapService } from './bootstrapService.js'
+import { createDashboardService } from './dashboardService.js';
+import { createReportService } from './report.service.js';
+import { createResidentService } from './residentService.js';
+import { createValidatorService } from './validatorService.js';
 
 function createServices(repositories, authSecret, syncService) {
+  const reportService = createReportService(repositories, syncService);
+
   return {
     admin: createAdminService(repositories),
     auth: createAuthService(repositories, authSecret),
     bootstrap: createBootstrapService(repositories),
-    dashboard: createDashboardService(repositories),
-    residents: createResidentService(repositories),
+    dashboard: createDashboardService(repositories, syncService),
+    reports: reportService,
+    residents: reportService || createResidentService(repositories),
     sync: syncService,
     validator: createValidatorService(repositories),
   };
 }
 
-module.exports = {
+export {
   createServices,
 };

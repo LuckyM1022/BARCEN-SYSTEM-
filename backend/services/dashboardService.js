@@ -1,11 +1,12 @@
-function createDashboardService(repositories) {
+function createDashboardService(repositories, syncService) {
   return {
     async getStats() {
-      const [residentCount, completedSurveys, activeEnumerators] = await Promise.all([
-        repositories.residents.countAll(),
-        repositories.census.countAll(),
-        repositories.users.countByRole('Census Taker'),
+      const [residentCount, completedSurveys, users] = await Promise.all([
+        syncService.countCollection('residents'),
+        syncService.countCollection('censusRecords'),
+        repositories.users.findAll(),
       ]);
+      const activeEnumerators = users.filter((user) => user.role === 'Census Taker').length;
 
       return {
         stats: [
@@ -35,6 +36,6 @@ function createDashboardService(repositories) {
   };
 }
 
-module.exports = {
+export {
   createDashboardService,
 };

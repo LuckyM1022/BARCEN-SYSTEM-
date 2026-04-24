@@ -5,13 +5,12 @@ import {
   Button,
   Checkbox,
   FormControlLabel,
-  Link,
   Paper,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { apiRequest } from '../api';
 import { getDefaultRouteForRole, saveCurrentUser } from '../auth';
 import barcenLogo from '../resources/Barcen_logo.png';
@@ -148,29 +147,11 @@ function LoginPage() {
                 }
                 label="Remember me"
               />
-              <Link
-                component="button"
-                type="button"
-                underline="hover"
-                onClick={() => setAuthStatus({
-                  severity: 'info',
-                  message: 'Password recovery is not connected yet. Use one of the demo accounts listed above.',
-                })}
-              >
-                Forgot password?
-              </Link>
             </Box>
 
             <Button size="large" type="submit" variant="contained" disabled={isSubmitting}>
               {isSubmitting ? 'Logging in...' : 'Login'}
             </Button>
-
-            <Typography className="signup-copy">
-              Need access?{' '}
-              <Link component={RouterLink} to="/register">
-                Request an account
-              </Link>
-            </Typography>
           </Stack>
         </Box>
       </Paper>

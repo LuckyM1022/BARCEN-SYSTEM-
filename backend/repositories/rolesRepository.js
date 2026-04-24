@@ -1,6 +1,6 @@
-const { ObjectId } = require('mongodb');
+import { ObjectId } from "mongodb";
 
-function createRolesRepository(db) {
+function createRolesRepository(db, syncQueue) {
   const collection = db.collection('roles');
 
   return {
@@ -22,22 +22,44 @@ function createRolesRepository(db) {
         _id: { $ne: new ObjectId(roleId) },
       });
     },
-    insertOne(role) {
-      return collection.insertOne(role);
+    async insertOne(role) {
+      const result = await collection.insertOne(role);
+
+      if (syncQueue) {
+        await syncQueue.queueUpsert('roles', { _id: result.insertedId, ...role });
+      }
+
+      return result;
     },
     insertMany(roles) {
       return collection.insertMany(roles);
     },
-    updateOne(roleId, role) {
-      return collection.findOneAndUpdate(
+    async updateOne(roleId, role) {
+      const result = await collection.findOneAndUpdate(
         { _id: new ObjectId(roleId) },
         { $set: role },
         { returnDocument: 'after' }
       );
+
+      if (result && syncQueue) {
+        await syncQueue.queueUpsert('roles', result);
+      }
+
+      return result;
+    },
+    async deleteOne(roleId) {
+      const normalizedRoleId = new ObjectId(roleId);
+      const result = await collection.deleteOne({ _id: normalizedRoleId });
+
+      if (result.deletedCount && syncQueue) {
+        await syncQueue.queueDelete('roles', normalizedRoleId);
+      }
+
+      return result;
     },
   };
 }
 
-module.exports = {
+export {
   createRolesRepository,
 };

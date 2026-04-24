@@ -1,4 +1,4 @@
-function serializeDocument(document) {
+export const serializeDocument = (document) => {
   if (!document) {
     return document;
   }
@@ -8,14 +8,9 @@ function serializeDocument(document) {
     id: String(_id),
     ...rest,
   };
-}
+};
 
-function publicUser(user) {
+export const publicUser = (user) => {
   const { password, ...safeUser } = serializeDocument(user);
   return safeUser;
-}
-
-module.exports = {
-  publicUser,
-  serializeDocument,
 };

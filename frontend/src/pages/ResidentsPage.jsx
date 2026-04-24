@@ -16,6 +16,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Typography,
@@ -23,12 +24,31 @@ import {
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { apiRequest } from '../api';
 import { clearCurrentUser, getCurrentUser } from '../auth';
+import ConfirmationDialog from '../components/ConfirmationDialog';
 import CensusDashboardShortcut from '../components/CensusDashboardShortcut';
 import barcenLogo from '../resources/Barcen_logo.png';
 import './AdminPage.css';
 import CertificatePreviewDialog from './CertificatePreviewDialog';
 
+const formatBirthday = (value) => {
+  if (!value) {
+    return 'Not provided';
+  }
+
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+
+  return parsedDate.toLocaleDateString('en-PH', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+};
+
 function ResidentsPage() {
+  const rowsPerPage = 10;
   const navigate = useNavigate();
   const currentUser = getCurrentUser();
   const [residentRecords, setResidentRecords] = useState([]);
@@ -38,16 +58,29 @@ function ResidentsPage() {
   const [status, setStatus] = useState({ severity: 'info', message: 'Loading residents...' });
   const [residentActionStatus, setResidentActionStatus] = useState(null);
   const [deletingResidentId, setDeletingResidentId] = useState('');
+  const [residentToDelete, setResidentToDelete] = useState(null);
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadResidents() {
       try {
-        const data = await apiRequest('/api/residents');
+        const searchParams = new URLSearchParams({
+          page: String(page),
+          pageSize: String(rowsPerPage),
+        });
+
+        if (searchTerm.trim()) {
+          searchParams.set('search', searchTerm.trim());
+        }
+
+        const data = await apiRequest(`/api/residents?${searchParams.toString()}`);
 
         if (!cancelled) {
-          setResidentRecords(data.residents);
+          setResidentRecords(data.residents || []);
+          setTotalCount(data.totalCount || 0);
           setStatus(null);
         }
       } catch (error) {
@@ -64,15 +97,11 @@ function ResidentsPage() {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, []);
+  }, [page, searchTerm]);
 
-  const filteredRecords = residentRecords.filter((record) => {
-    const searchableText = [record.name, record.address, record.submittedBy]
-      .join(' ')
-      .toLowerCase();
-
-    return searchableText.includes(searchTerm.toLowerCase());
-  });
+  useEffect(() => {
+    setPage((current) => Math.min(current, Math.max(0, Math.ceil(totalCount / rowsPerPage) - 1)));
+  }, [totalCount]);
 
   const handleOpenCertificateDialog = (resident) => {
     setSelectedResident(resident);
@@ -96,22 +125,24 @@ function ResidentsPage() {
     handleCloseCertificateDialog();
   };
 
-  const handleResidentDelete = async (residentId) => {
-    if (!window.confirm('Are you sure you want to delete this resident?')) {
+  const handleResidentDelete = async () => {
+    if (!residentToDelete?.id) {
       return;
     }
 
     setResidentActionStatus(null);
-    setDeletingResidentId(residentId);
+    setDeletingResidentId(residentToDelete.id);
 
     try {
-      await apiRequest(`/api/residents/${residentId}`, { method: 'DELETE' });
-      setResidentRecords((current) => current.filter((resident) => resident.id !== residentId));
+      await apiRequest(`/api/residents/${residentToDelete.id}`, { method: 'DELETE' });
+      setResidentRecords((current) => current.filter((resident) => resident.id !== residentToDelete.id));
+      setTotalCount((current) => Math.max(0, current - 1));
       setResidentActionStatus({ severity: 'success', message: 'Resident removed.' });
     } catch (error) {
       setResidentActionStatus({ severity: 'error', message: error.message });
     } finally {
       setDeletingResidentId('');
+      setResidentToDelete(null);
     }
   };
 
@@ -206,7 +237,10 @@ function ResidentsPage() {
                   className="admin-search"
                   label="Search residents"
                   value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
+                  onChange={(event) => {
+                    setSearchTerm(event.target.value);
+                    setPage(0);
+                  }}
                 />
               </Box>
 
@@ -221,15 +255,17 @@ function ResidentsPage() {
                   <TableHead>
                     <TableRow>
                       <TableCell>Resident</TableCell>
+                      <TableCell>Birthday</TableCell>
                       <TableCell>Address</TableCell>
                       <TableCell>Submitted By</TableCell>
                       <TableCell>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {filteredRecords.map((record) => (
+                    {residentRecords.map((record) => (
                       <TableRow key={record.id}>
                         <TableCell>{record.name}</TableCell>
+                        <TableCell>{formatBirthday(record.birthday)}</TableCell>
                         <TableCell>{record.address}</TableCell>
                         <TableCell>{record.submittedBy}</TableCell>
                         <TableCell>
@@ -246,7 +282,7 @@ function ResidentsPage() {
                               variant="text"
                               color="error"
                               disabled={deletingResidentId === record.id}
-                              onClick={() => handleResidentDelete(record.id)}
+                              onClick={() => setResidentToDelete(record)}
                             >
                               {deletingResidentId === record.id ? 'Removing...' : 'Remove'}
                             </Button>
@@ -254,9 +290,9 @@ function ResidentsPage() {
                         </TableCell>
                       </TableRow>
                     ))}
-                    {filteredRecords.length === 0 && (
+                    {residentRecords.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={4} className="admin-empty-state">
+                        <TableCell colSpan={5} className="admin-empty-state">
                           No matching records found.
                         </TableCell>
                       </TableRow>
@@ -264,6 +300,14 @@ function ResidentsPage() {
                   </TableBody>
                 </Table>
               </TableContainer>
+              <TablePagination
+                component="div"
+                count={totalCount}
+                page={page}
+                onPageChange={(event, nextPage) => setPage(nextPage)}
+                rowsPerPage={rowsPerPage}
+                rowsPerPageOptions={[rowsPerPage]}
+              />
             </Paper>
           </Box>
         </section>
@@ -305,6 +349,16 @@ function ResidentsPage() {
         open={certificateType === 'indigency'}
         onClose={handleCloseCertificateDialog}
         resident={selectedResident}
+      />
+
+      <ConfirmationDialog
+        open={Boolean(residentToDelete)}
+        title="Remove Resident"
+        message={`Are you sure you want to remove ${residentToDelete?.name || 'this resident'}?`}
+        confirmLabel="Remove"
+        loading={Boolean(residentToDelete) && deletingResidentId === residentToDelete?.id}
+        onClose={() => setResidentToDelete(null)}
+        onConfirm={handleResidentDelete}
       />
     </main>
   );
