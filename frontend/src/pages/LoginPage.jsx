@@ -111,10 +111,11 @@ function LoginPage() {
               </Typography>
             </Box>
 
-            <Alert severity={authStatus?.severity || 'info'} variant="outlined">
-              {authStatus?.message ||
-                'Demo accounts: andrea.reyes@barcen.local / admin123, john.delacruz@barcen.local / validator123, liza.manalo@barcen.local / census123'}
-            </Alert>
+            {authStatus && (
+              <Alert severity={authStatus.severity} variant="outlined">
+                {authStatus.message}
+              </Alert>
+            )}
 
             <TextField
               fullWidth
