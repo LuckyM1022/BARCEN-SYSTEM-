@@ -89,7 +89,7 @@ const demoValidatorSettings = {
   quickCertificateMode: false,
 };
 
-module.exports = {
+export {
   demoAdminSettings,
   demoResidents,
   demoRoles,

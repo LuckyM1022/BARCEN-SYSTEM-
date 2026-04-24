@@ -1,4 +1,4 @@
-function createSettingsRepository(db) {
+function createSettingsRepository(db, syncQueue) {
   const collection = db.collection('settings');
 
   return {
@@ -8,22 +8,31 @@ function createSettingsRepository(db) {
     countAll() {
       return collection.countDocuments();
     },
+    findAll() {
+      return collection.find({}).toArray();
+    },
     findByScope(scope) {
       return collection.findOne({ scope });
     },
     insertMany(settings) {
       return collection.insertMany(settings);
     },
-    updateByScope(scope, updates) {
-      return collection.findOneAndUpdate(
+    async updateByScope(scope, updates) {
+      const result = await collection.findOneAndUpdate(
         { scope },
         { $set: updates },
         { upsert: true, returnDocument: 'after' }
       );
+
+      if (result && syncQueue) {
+        await syncQueue.queueUpsert('settings', result);
+      }
+
+      return result;
     },
   };
 }
 
-module.exports = {
+export {
   createSettingsRepository,
 };

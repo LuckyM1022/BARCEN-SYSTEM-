@@ -1,6 +1,6 @@
-const { ObjectId } = require('mongodb');
+import { ObjectId } from "mongodb";
 
-function createUsersRepository(db) {
+function createUsersRepository(db, syncQueue) {
   const collection = db.collection('users');
 
   return {
@@ -31,8 +31,14 @@ function createUsersRepository(db) {
     findAllRaw() {
       return collection.find({}).toArray();
     },
-    insertOne(user) {
-      return collection.insertOne(user);
+    async insertOne(user) {
+      const result = await collection.insertOne(user);
+
+      if (syncQueue) {
+        await syncQueue.queueUpsert('users', { _id: result.insertedId, ...user });
+      }
+
+      return result;
     },
     insertMany(users) {
       return collection.insertMany(users);
@@ -40,19 +46,32 @@ function createUsersRepository(db) {
     updatePassword(userId, password) {
       return collection.updateOne({ _id: new ObjectId(userId) }, { $set: { password } });
     },
-    updateOne(userId, updates) {
-      return collection.findOneAndUpdate(
+    async updateOne(userId, updates) {
+      const result = await collection.findOneAndUpdate(
         { _id: new ObjectId(userId) },
         { $set: updates },
         { returnDocument: 'after' }
       );
+
+      if (result && syncQueue) {
+        await syncQueue.queueUpsert('users', result);
+      }
+
+      return result;
     },
-    deleteOne(userId) {
-      return collection.deleteOne({ _id: new ObjectId(userId) });
+    async deleteOne(userId) {
+      const normalizedUserId = new ObjectId(userId);
+      const result = await collection.deleteOne({ _id: normalizedUserId });
+
+      if (result.deletedCount && syncQueue) {
+        await syncQueue.queueDelete('users', normalizedUserId);
+      }
+
+      return result;
     },
   };
 }
 
-module.exports = {
+export {
   createUsersRepository,
 };

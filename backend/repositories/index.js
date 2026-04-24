@@ -1,11 +1,11 @@
-const { createCensusRepository } = require('./censusRepository');
-const { createResidentsRepository } = require('./residentsRepository');
-const { createRolesRepository } = require('./rolesRepository');
-const { createSettingsRepository } = require('./settingsRepository');
-const { createSyncQueueRepository } = require('./syncQueueRepository');
-const { createUsersRepository } = require('./usersRepository');
+import { createCensusRepository } from './censusRepository.js';
+import { createResidentsRepository } from './residentsRepository.js';
+import { createRolesRepository } from './rolesRepository.js';
+import { createSettingsRepository } from './settingsRepository.js';
+import { createSyncQueueRepository } from './syncQueueRepository.js';
+import { createUsersRepository } from './usersRepository.js';
 
-function createNoopSyncQueueRepository() {
+const createNoopSyncQueueRepository = () => {
   return {
     async createIndexes() {},
     async queueUpsert() {},
@@ -26,22 +26,18 @@ function createNoopSyncQueueRepository() {
       return [];
     },
   };
-}
+};
 
-function createRepositories(db, options = {}) {
+export const createRepositories = (db, options = {}) => {
   const { enableSyncQueue = true } = options;
   const syncQueue = enableSyncQueue ? createSyncQueueRepository(db) : createNoopSyncQueueRepository();
 
   return {
     census: createCensusRepository(db, syncQueue),
     residents: createResidentsRepository(db, syncQueue),
-    roles: createRolesRepository(db),
-    settings: createSettingsRepository(db),
+    roles: createRolesRepository(db, syncQueue),
+    settings: createSettingsRepository(db, syncQueue),
     syncQueue,
-    users: createUsersRepository(db),
+    users: createUsersRepository(db, syncQueue),
   };
-}
-
-module.exports = {
-  createRepositories,
 };

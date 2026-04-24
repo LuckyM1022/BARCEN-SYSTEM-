@@ -1,24 +1,21 @@
-const http = require('http');
-const { MongoClient } = require('mongodb');
-const {
-  ATLAS_MONGODB_URI,
-  AUTH_SECRET,
-  DB_NAME,
-  ENABLE_ATLAS_SYNC,
-  FRONTEND_ORIGIN,
-  LEGACY_MONGODB_URI,
-  LOCAL_FIRST_MODE,
-  LOCAL_MONGODB_URI,
-  PORT,
-  PRIMARY_MONGODB_URI,
-  SYNC_INTERVAL_MS,
-} = require('./config/env');
-const { AppError } = require('./lib/errors');
-const { sendJson } = require('./lib/http');
-const { createRepositories } = require('./repositories');
-const { createRouter } = require('./routes');
-const { createAtlasSyncService } = require('./services/atlasSyncService');
-const { createServices } = require('./services');
+import { MongoClient } from 'mongodb';
+import {
+    ATLAS_MONGODB_URI,
+    AUTH_SECRET,
+    DB_NAME,
+    ENABLE_ATLAS_SYNC,
+    FRONTEND_ORIGIN,
+    LEGACY_MONGODB_URI,
+    LOCAL_FIRST_MODE,
+    LOCAL_MONGODB_URI,
+    PORT,
+    PRIMARY_MONGODB_URI,
+    SYNC_INTERVAL_MS,
+} from './config/env.js'
+import { createApp } from './app.js'
+import { createRepositories } from './repositories/index.js'
+import { createAtlasSyncService } from './services/atlasSyncService.js'
+import { createServices } from './services/index.js'
 
 function redactMongoUri(uri = '') {
   return uri.replace(/\/\/([^:/?#]+):([^@]+)@/u, '//$1:***@');
@@ -100,32 +97,9 @@ async function startServer() {
     await services.bootstrap.initialize();
     await services.sync.start();
 
-    const routeRequest = createRouter(services);
-    server = http.createServer(async (request, response) => {
-      if (request.method === 'OPTIONS') {
-        sendJson(response, 200, {}, FRONTEND_ORIGIN);
-        return;
-      }
+    const app = createApp(services, FRONTEND_ORIGIN);
 
-      try {
-        const result = await routeRequest(request);
-        sendJson(response, result.statusCode, result.body, FRONTEND_ORIGIN);
-      } catch (error) {
-        if (error instanceof AppError) {
-          sendJson(response, error.statusCode, { message: error.message }, FRONTEND_ORIGIN);
-          return;
-        }
-
-        sendJson(
-          response,
-          500,
-          { message: 'Server error.', detail: error.message },
-          FRONTEND_ORIGIN
-        );
-      }
-    });
-
-    server.listen(PORT, '0.0.0.0', () => {
+    server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Barcen API server running at http://0.0.0.0:${PORT}`);
       console.log(`MongoDB database: ${DB_NAME}`);
       console.log(`Primary database URI: ${redactMongoUri(activePrimaryUri)}`);

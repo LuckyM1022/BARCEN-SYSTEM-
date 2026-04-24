@@ -9,26 +9,43 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControlLabel,
   MenuItem,
   Paper,
   Stack,
-  Switch,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Typography,
 } from '@mui/material';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { apiRequest } from '../api';
-import { clearCurrentUser, getCurrentUser } from '../auth';
+import { clearCurrentUser, getCurrentUser, saveCurrentUser } from '../auth';
+import ConfirmationDialog from '../components/ConfirmationDialog';
 import CensusDashboardShortcut from '../components/CensusDashboardShortcut';
 import barcenLogo from '../resources/Barcen_logo.png';
 import './AdminPage.css';
+
+const formatBirthday = (value) => {
+  if (!value) {
+    return 'Not provided';
+  }
+
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+
+  return parsedDate.toLocaleDateString('en-PH', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+};
 
 const DEFAULT_ROLES = [
   {
@@ -56,23 +73,36 @@ const initialUserDialogValues = {
   password: '',
 };
 
+const createProfileForm = (user) => ({
+  name: user?.name || '',
+  email: user?.email || '',
+  phoneNumber: user?.phoneNumber || '',
+});
+
+const initialPasswordForm = {
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+};
+
 function UserAdminPage() {
+  const rowsPerPage = 5;
   const navigate = useNavigate();
   const location = useLocation();
-  const currentUser = getCurrentUser();
+  const [sessionUser, setSessionUser] = useState(() => getCurrentUser());
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState([]);
   const [residents, setResidents] = useState([]);
+  const [residentsTotal, setResidentsTotal] = useState(0);
+  const [residentSearchTerm, setResidentSearchTerm] = useState('');
   const [censusRecords, setCensusRecords] = useState([]);
+  const [censusRecordsTotal, setCensusRecordsTotal] = useState(0);
   const [status, setStatus] = useState({ severity: 'info', message: 'Loading admin workspace...' });
   const [activeView, setActiveView] = useState('users');
-  const [settings, setSettings] = useState({
-    emailNotifications: true,
-    certificateApproval: true,
-    maintenanceMode: false,
-  });
   const [roles, setRoles] = useState(DEFAULT_ROLES);
   const [settingsStatus, setSettingsStatus] = useState(null);
+  const [profileForm, setProfileForm] = useState(() => createProfileForm(getCurrentUser()));
+  const [passwordForm, setPasswordForm] = useState(initialPasswordForm);
   const [residentActionStatus, setResidentActionStatus] = useState(null);
   const [roleStatus, setRoleStatus] = useState(null);
   const [userStatus, setUserStatus] = useState(null);
@@ -94,14 +124,20 @@ function UserAdminPage() {
     userId: '',
     values: initialUserDialogValues,
   });
+  const [deletingRoleId, setDeletingRoleId] = useState('');
   const [deletingUserId, setDeletingUserId] = useState('');
   const [deletingResidentId, setDeletingResidentId] = useState('');
+  const [userToDelete, setUserToDelete] = useState(null);
+  const [residentToDelete, setResidentToDelete] = useState(null);
+  const [residentsPage, setResidentsPage] = useState(0);
+  const [reportsRecordsPage, setReportsRecordsPage] = useState(0);
+  const visibleStats = stats.filter((stat) => stat.label !== 'Pending Reviews');
 
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     const view = searchParams.get('view');
 
-    if (view && ['users', 'residents', 'roles', 'reports', 'settings'].includes(view)) {
+    if (view && ['users', 'residents', 'reports', 'settings'].includes(view)) {
       setActiveView(view);
     }
   }, [location.search]);
@@ -111,13 +147,21 @@ function UserAdminPage() {
 
     async function loadAdminWorkspace() {
       try {
-        const [usersData, rolesData, settingsData, statsData, residentsData, recordsData] = await Promise.all([
+        const residentSearchParams = new URLSearchParams({
+          page: String(residentsPage),
+          pageSize: String(rowsPerPage),
+        });
+
+        if (residentSearchTerm.trim()) {
+          residentSearchParams.set('search', residentSearchTerm.trim());
+        }
+
+        const [usersData, rolesData, statsData, residentsData, recordsData] = await Promise.all([
           apiRequest('/api/users'),
           apiRequest('/api/admin/roles'),
-          apiRequest('/api/admin/settings'),
           apiRequest('/api/dashboard/stats'),
-          apiRequest('/api/residents'),
-          apiRequest('/api/census-records'),
+          apiRequest(`/api/residents?${residentSearchParams.toString()}`),
+          apiRequest(`/api/census-records?page=${reportsRecordsPage}&pageSize=${rowsPerPage}`),
         ]);
 
         if (cancelled) {
@@ -126,13 +170,11 @@ function UserAdminPage() {
 
         setUsers(usersData.users);
         setRoles(rolesData.roles || DEFAULT_ROLES);
-        setSettings((current) => ({
-          ...current,
-          ...(settingsData.settings || {}),
-        }));
         setStats(statsData.stats);
-        setResidents(residentsData.residents);
-        setCensusRecords(recordsData.records);
+        setResidents(residentsData.residents || []);
+        setResidentsTotal(residentsData.totalCount || 0);
+        setCensusRecords(recordsData.records || []);
+        setCensusRecordsTotal(recordsData.totalCount || 0);
         setStatus(null);
       } catch (error) {
         if (!cancelled) {
@@ -142,35 +184,34 @@ function UserAdminPage() {
     }
 
     loadAdminWorkspace();
-    const intervalId = window.setInterval(loadAdminWorkspace, 5000);
+    const intervalId = activeView === 'settings'
+      ? null
+      : window.setInterval(loadAdminWorkspace, 5000);
 
     return () => {
       cancelled = true;
-      window.clearInterval(intervalId);
+      if (intervalId) {
+        window.clearInterval(intervalId);
+      }
     };
-  }, []);
+  }, [activeView, reportsRecordsPage, residentSearchTerm, residentsPage]);
 
   const reportSummary = useMemo(() => {
-    const latestResidents = residents.slice(0, 5);
-    const latestRecords = censusRecords.slice(0, 5);
-
     return {
       totalUsers: users.length,
-      totalResidents: residents.length,
-      totalSubmissions: censusRecords.length,
-      latestResidents,
-      latestRecords,
+      totalResidents: residentsTotal,
+      totalSubmissions: censusRecordsTotal,
     };
-  }, [censusRecords, residents, users.length]);
+  }, [censusRecordsTotal, residentsTotal, users.length]);
 
-  const handleSettingToggle = (event) => {
-    const { name, checked } = event.target;
-    setSettingsStatus(null);
-    setSettings((current) => ({
-      ...current,
-      [name]: checked,
-    }));
-  };
+  useEffect(() => {
+    setResidentsPage((current) => Math.min(current, Math.max(0, Math.ceil(residentsTotal / rowsPerPage) - 1)));
+    setReportsRecordsPage((current) => Math.min(current, Math.max(0, Math.ceil(censusRecordsTotal / rowsPerPage) - 1)));
+  }, [censusRecordsTotal, residentsTotal]);
+
+  useEffect(() => {
+    setProfileForm(createProfileForm(sessionUser));
+  }, [sessionUser]);
 
   const openCreateRoleDialog = () => {
     setRoleStatus(null);
@@ -265,16 +306,50 @@ function UserAdminPage() {
     }
   };
 
-  const handleSettingsSave = async () => {
+  const handleProfileSave = async () => {
     try {
-      const data = await apiRequest('/api/admin/settings', {
+      const data = await apiRequest('/api/auth/profile', {
         method: 'PUT',
-        body: JSON.stringify(settings),
+        body: JSON.stringify(profileForm),
       });
-      setSettings((current) => ({ ...current, ...(data.settings || {}) }));
-      setSettingsStatus({ severity: 'success', message: 'Settings saved successfully.' });
+      saveCurrentUser(data.user, data.token);
+      setSessionUser(data.user);
+      setUsers((current) => current.map((user) => (user.id === data.user.id ? data.user : user)));
+      setSettingsStatus({ severity: 'success', message: 'Your account details were updated.' });
     } catch (error) {
       setSettingsStatus({ severity: 'error', message: error.message });
+    }
+  };
+
+  const handlePasswordSave = async () => {
+    try {
+      const data = await apiRequest('/api/auth/password', {
+        method: 'PUT',
+        body: JSON.stringify(passwordForm),
+      });
+      setPasswordForm(initialPasswordForm);
+      setSettingsStatus({ severity: 'success', message: data.message || 'Password updated successfully.' });
+    } catch (error) {
+      setSettingsStatus({ severity: 'error', message: error.message });
+    }
+  };
+
+  const handleRoleDelete = async (roleId) => {
+    if (!window.confirm('Are you sure you want to delete this role?')) {
+      return;
+    }
+
+    setRoleStatus(null);
+    setDeletingRoleId(roleId);
+
+    try {
+      await apiRequest(`/api/admin/roles/${roleId}`, { method: 'DELETE' });
+      setRoles((current) => current.filter((role) => role.id !== roleId));
+      setRoleStatus({ severity: 'success', message: 'Role removed.' });
+    } catch (error) {
+      setRoleStatus({ severity: 'error', message: error.message });
+    } finally {
+      setDeletingRoleId('');
     }
   };
 
@@ -359,37 +434,44 @@ function UserAdminPage() {
     }
   };
 
-  const handleUserDelete = async (userId) => {
+  const handleUserDelete = async () => {
+    if (!userToDelete?.id) {
+      return;
+    }
+
     setUserStatus(null);
-    setDeletingUserId(userId);
+    setDeletingUserId(userToDelete.id);
 
     try {
-      await apiRequest(`/api/users/${userId}`, { method: 'DELETE' });
-      setUsers((current) => current.filter((user) => user.id !== userId));
+      await apiRequest(`/api/users/${userToDelete.id}`, { method: 'DELETE' });
+      setUsers((current) => current.filter((user) => user.id !== userToDelete.id));
       setUserStatus({ severity: 'success', message: 'User removed.' });
     } catch (error) {
       setUserStatus({ severity: 'error', message: error.message });
     } finally {
       setDeletingUserId('');
+      setUserToDelete(null);
     }
   };
 
-  const handleResidentDelete = async (residentId) => {
-    if (!window.confirm('Are you sure you want to delete this resident?')) {
+  const handleResidentDelete = async () => {
+    if (!residentToDelete?.id) {
       return;
     }
 
     setResidentActionStatus(null);
-    setDeletingResidentId(residentId);
+    setDeletingResidentId(residentToDelete.id);
 
     try {
-      await apiRequest(`/api/residents/${residentId}`, { method: 'DELETE' });
-      setResidents((current) => current.filter((resident) => resident.id !== residentId));
+      await apiRequest(`/api/residents/${residentToDelete.id}`, { method: 'DELETE' });
+      setResidents((current) => current.filter((resident) => resident.id !== residentToDelete.id));
+      setResidentsTotal((current) => Math.max(0, current - 1));
       setResidentActionStatus({ severity: 'success', message: 'Resident removed.' });
     } catch (error) {
       setResidentActionStatus({ severity: 'error', message: error.message });
     } finally {
       setDeletingResidentId('');
+      setResidentToDelete(null);
     }
   };
 
@@ -418,12 +500,6 @@ function UserAdminPage() {
               onClick={() => setActiveView('residents')}
             >
               Residents
-            </Button>
-            <Button
-              variant={activeView === 'roles' ? 'contained' : 'text'}
-              onClick={() => setActiveView('roles')}
-            >
-              Roles
             </Button>
             <Button
               variant={activeView === 'reports' ? 'contained' : 'text'}
@@ -457,11 +533,11 @@ function UserAdminPage() {
               </Typography>
             </Box>
             <Box className="admin-user">
-              <Avatar className="admin-avatar">{currentUser?.name?.charAt(0) || 'A'}</Avatar>
+              <Avatar className="admin-avatar">{sessionUser?.name?.charAt(0) || 'A'}</Avatar>
               <Box>
-                <Typography className="admin-user-name">{currentUser?.name || 'Admin User'}</Typography>
+                <Typography className="admin-user-name">{sessionUser?.name || 'Admin User'}</Typography>
                 <Typography className="admin-user-role">
-                  {currentUser?.role || 'System Administrator'}
+                  {sessionUser?.role || 'System Administrator'}
                 </Typography>
               </Box>
             </Box>
@@ -474,7 +550,7 @@ function UserAdminPage() {
           )}
 
           <Box className="admin-stats">
-            {stats.map((stat) => (
+            {visibleStats.map((stat) => (
               <Paper key={stat.label} className="admin-stat-card" elevation={0}>
                 <Typography className="admin-stat-label">{stat.label}</Typography>
                 <Typography className="admin-stat-value">{stat.value}</Typography>
@@ -527,7 +603,7 @@ function UserAdminPage() {
                                 variant="text"
                                 color="error"
                                 disabled={deletingUserId === user.id}
-                                onClick={() => handleUserDelete(user.id)}
+                                onClick={() => setUserToDelete(user)}
                               >
                                 {deletingUserId === user.id ? 'Removing...' : 'Remove'}
                               </Button>
@@ -550,7 +626,7 @@ function UserAdminPage() {
                     </Typography>
                     <Box className="admin-panel-tools">
                       <Chip label="Live sync every 5s" size="small" />
-                      <CensusDashboardShortcut canAccess={['Admin', 'Personnel / Validator', 'Census Taker'].includes(currentUser?.role)} />
+                      <CensusDashboardShortcut canAccess={['Admin', 'Personnel / Validator', 'Census Taker'].includes(sessionUser?.role)} />
                     </Box>
                   </Box>
                   <Typography className="admin-copy">
@@ -563,7 +639,16 @@ function UserAdminPage() {
                     <Typography variant="h6" className="admin-panel-title">
                       Resident Records
                     </Typography>
-                    <Typography className="admin-copy">Shared live data with validator tools</Typography>
+                    <TextField
+                      size="small"
+                      className="admin-search"
+                      label="Search residents"
+                      value={residentSearchTerm}
+                      onChange={(event) => {
+                        setResidentSearchTerm(event.target.value);
+                        setResidentsPage(0);
+                      }}
+                    />
                   </Box>
 
                   {residentActionStatus && (
@@ -577,6 +662,7 @@ function UserAdminPage() {
                       <TableHead>
                         <TableRow>
                           <TableCell>Resident</TableCell>
+                          <TableCell>Birthday</TableCell>
                           <TableCell>Address</TableCell>
                           <TableCell>Submitted By</TableCell>
                           <TableCell>Actions</TableCell>
@@ -586,6 +672,7 @@ function UserAdminPage() {
                         {residents.map((resident) => (
                           <TableRow key={resident.id}>
                             <TableCell>{resident.name}</TableCell>
+                            <TableCell>{formatBirthday(resident.birthday)}</TableCell>
                             <TableCell>{resident.address}</TableCell>
                             <TableCell>{resident.submittedBy}</TableCell>
                             <TableCell>
@@ -602,7 +689,7 @@ function UserAdminPage() {
                                   variant="text"
                                   color="error"
                                   disabled={deletingResidentId === resident.id}
-                                  onClick={() => handleResidentDelete(resident.id)}
+                                  onClick={() => setResidentToDelete(resident)}
                                 >
                                   {deletingResidentId === resident.id ? 'Removing...' : 'Remove'}
                                 </Button>
@@ -613,51 +700,16 @@ function UserAdminPage() {
                       </TableBody>
                     </Table>
                   </TableContainer>
+                  <TablePagination
+                    component="div"
+                    count={residentsTotal}
+                    page={residentsPage}
+                    onPageChange={(event, nextPage) => setResidentsPage(nextPage)}
+                    rowsPerPage={rowsPerPage}
+                    rowsPerPageOptions={[rowsPerPage]}
+                  />
                 </Paper>
               </Stack>
-            )}
-
-            {activeView === 'roles' && (
-              <Paper className="admin-panel admin-panel-wide" elevation={0}>
-                <Box className="admin-panel-header">
-                  <Typography variant="h6" className="admin-panel-title">
-                    Role Access
-                  </Typography>
-                  <Button variant="contained" onClick={openCreateRoleDialog}>
-                    Create Role
-                  </Button>
-                </Box>
-
-                {roleStatus && (
-                  <Alert severity={roleStatus.severity} className="admin-alert">
-                    {roleStatus.message}
-                  </Alert>
-                )}
-
-                <Box className="admin-role-grid">
-                  {roles.map((role) => (
-                    <Box key={role.name} className="admin-role-card">
-                      <Box className="admin-role-topline">
-                        <Typography className="admin-role-name">{role.name}</Typography>
-                        <Chip label={`${role.members} member${role.members > 1 ? 's' : ''}`} size="small" />
-                      </Box>
-                      <Typography className="admin-role-copy">{role.access}</Typography>
-                      <Box className="admin-role-actions">
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={() => openEditRoleDialog(role)}
-                        >
-                          Edit Access
-                        </Button>
-                        <Button size="small" variant="text" onClick={() => setRoleMembersPreview(role)}>
-                          View Members
-                        </Button>
-                      </Box>
-                    </Box>
-                  ))}
-                </Box>
-              </Paper>
             )}
 
             {activeView === 'reports' && (
@@ -700,7 +752,7 @@ function UserAdminPage() {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {reportSummary.latestRecords.map((record) => (
+                        {censusRecords.map((record) => (
                           <TableRow key={record.id}>
                             <TableCell>{[record.firstName, record.lastName].filter(Boolean).join(' ')}</TableCell>
                             <TableCell>{record.area}</TableCell>
@@ -708,7 +760,7 @@ function UserAdminPage() {
                             <TableCell>{new Date(record.createdAt).toLocaleString()}</TableCell>
                           </TableRow>
                         ))}
-                        {reportSummary.latestRecords.length === 0 && (
+                        {censusRecords.length === 0 && (
                           <TableRow>
                             <TableCell colSpan={4} className="admin-empty-state">
                               No census submissions yet.
@@ -718,89 +770,114 @@ function UserAdminPage() {
                       </TableBody>
                     </Table>
                   </TableContainer>
+                  <TablePagination
+                    component="div"
+                    count={censusRecordsTotal}
+                    page={reportsRecordsPage}
+                    onPageChange={(event, nextPage) => setReportsRecordsPage(nextPage)}
+                    rowsPerPage={rowsPerPage}
+                    rowsPerPageOptions={[rowsPerPage]}
+                  />
                 </Paper>
               </Stack>
             )}
 
             {activeView === 'settings' && (
-              <Paper className="admin-panel admin-panel-wide" elevation={0}>
-                <Box className="admin-panel-header">
-                  <Typography variant="h6" className="admin-panel-title">
-                    Platform Settings
-                  </Typography>
-                  <Button variant="contained" onClick={handleSettingsSave}>
-                    Save Changes
-                  </Button>
-                </Box>
-
-                {settingsStatus && (
-                  <Alert severity={settingsStatus.severity} className="admin-alert">
-                    {settingsStatus.message}
-                  </Alert>
-                )}
-
-                <Stack spacing={2.5} className="admin-settings-list">
-                  <Box className="admin-setting-row">
-                    <Box>
-                      <Typography className="admin-setting-title">Email Notifications</Typography>
-                      <Typography className="admin-setting-copy">
-                        Send account and submission updates to admin users.
-                      </Typography>
-                    </Box>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={settings.emailNotifications}
-                          onChange={handleSettingToggle}
-                          name="emailNotifications"
-                        />
-                      }
-                      label={settings.emailNotifications ? 'Enabled' : 'Disabled'}
-                      labelPlacement="start"
-                    />
+              <Stack spacing={2.5}>
+                <Paper className="admin-panel admin-panel-wide" elevation={0}>
+                  <Box className="admin-panel-header">
+                    <Typography variant="h6" className="admin-panel-title">
+                      My Account
+                    </Typography>
+                    <Button variant="contained" onClick={handleProfileSave}>
+                      Save Details
+                    </Button>
                   </Box>
 
-                  <Box className="admin-setting-row">
-                    <Box>
-                      <Typography className="admin-setting-title">Certificate Approval</Typography>
-                      <Typography className="admin-setting-copy">
-                        Require validator review before document release.
-                      </Typography>
-                    </Box>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={settings.certificateApproval}
-                          onChange={handleSettingToggle}
-                          name="certificateApproval"
-                        />
-                      }
-                      label={settings.certificateApproval ? 'Enabled' : 'Disabled'}
-                      labelPlacement="start"
+                  {settingsStatus && (
+                    <Alert severity={settingsStatus.severity} className="admin-alert">
+                      {settingsStatus.message}
+                    </Alert>
+                  )}
+
+                  <Stack spacing={2.5} className="admin-settings-list">
+                    <TextField
+                      fullWidth
+                      label="Full name"
+                      value={profileForm.name}
+                      onChange={(event) => {
+                        setSettingsStatus(null);
+                        setProfileForm((current) => ({ ...current, name: event.target.value }));
+                      }}
                     />
+                    <TextField
+                      fullWidth
+                      label="Email"
+                      type="email"
+                      value={profileForm.email}
+                      onChange={(event) => {
+                        setSettingsStatus(null);
+                        setProfileForm((current) => ({ ...current, email: event.target.value }));
+                      }}
+                    />
+                    <TextField
+                      fullWidth
+                      label="Phone number"
+                      value={profileForm.phoneNumber}
+                      onChange={(event) => {
+                        setSettingsStatus(null);
+                        setProfileForm((current) => ({ ...current, phoneNumber: event.target.value }));
+                      }}
+                    />
+                  </Stack>
+                </Paper>
+
+                <Paper className="admin-panel admin-panel-wide" elevation={0}>
+                  <Box className="admin-panel-header">
+                    <Typography variant="h6" className="admin-panel-title">
+                      Change My Password
+                    </Typography>
+                    <Button variant="contained" onClick={handlePasswordSave}>
+                      Update Password
+                    </Button>
                   </Box>
 
-                  <Box className="admin-setting-row">
-                    <Box>
-                      <Typography className="admin-setting-title">Maintenance Mode</Typography>
-                      <Typography className="admin-setting-copy">
-                        Temporarily limit new activity while system updates are in progress.
-                      </Typography>
-                    </Box>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={settings.maintenanceMode}
-                          onChange={handleSettingToggle}
-                          name="maintenanceMode"
-                        />
-                      }
-                      label={settings.maintenanceMode ? 'Enabled' : 'Disabled'}
-                      labelPlacement="start"
+                  <Stack spacing={2.5} className="admin-settings-list">
+                    <TextField
+                      fullWidth
+                      label="Current password"
+                      type="password"
+                      value={passwordForm.currentPassword}
+                      onChange={(event) => {
+                        setSettingsStatus(null);
+                        setPasswordForm((current) => ({ ...current, currentPassword: event.target.value }));
+                      }}
                     />
-                  </Box>
-                </Stack>
-              </Paper>
+                    <TextField
+                      fullWidth
+                      label="New password"
+                      type="password"
+                      helperText="Use at least 8 characters with 1 uppercase letter, 1 number, and 1 symbol."
+                      value={passwordForm.newPassword}
+                      onChange={(event) => {
+                        setSettingsStatus(null);
+                        setPasswordForm((current) => ({ ...current, newPassword: event.target.value }));
+                      }}
+                    />
+                    <TextField
+                      fullWidth
+                      label="Confirm new password"
+                      type="password"
+                      value={passwordForm.confirmPassword}
+                      onChange={(event) => {
+                        setSettingsStatus(null);
+                        setPasswordForm((current) => ({ ...current, confirmPassword: event.target.value }));
+                      }}
+                    />
+                  </Stack>
+                </Paper>
+
+              </Stack>
             )}
           </Box>
         </section>
@@ -813,6 +890,10 @@ function UserAdminPage() {
             <Box>
               <Typography className="admin-detail-label">Resident</Typography>
               <Typography className="admin-detail-value">{residentPreview?.name}</Typography>
+            </Box>
+            <Box>
+              <Typography className="admin-detail-label">Birthday</Typography>
+              <Typography className="admin-detail-value">{formatBirthday(residentPreview?.birthday)}</Typography>
             </Box>
             <Box>
               <Typography className="admin-detail-label">Address</Typography>
@@ -934,16 +1015,19 @@ function UserAdminPage() {
                 </MenuItem>
               ))}
             </TextField>
-            {userDialogState.mode === 'create' && (
-              <TextField
-                fullWidth
-                label="Password"
-                name="password"
-                type="password"
-                value={userDialogState.values.password}
-                onChange={handleUserInputChange}
-              />
-            )}
+            <TextField
+              fullWidth
+              label={userDialogState.mode === 'create' ? 'Password' : 'New password'}
+              name="password"
+              type="password"
+              helperText={
+                userDialogState.mode === 'create'
+                  ? 'Use at least 8 characters with 1 uppercase letter, 1 number, and 1 symbol.'
+                  : 'Leave blank to keep the current password. If set, use 8+ chars with 1 uppercase, 1 number, and 1 symbol.'
+              }
+              value={userDialogState.values.password}
+              onChange={handleUserInputChange}
+            />
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -953,6 +1037,26 @@ function UserAdminPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmationDialog
+        open={Boolean(userToDelete)}
+        title="Remove User"
+        message={`Are you sure you want to remove ${userToDelete?.name || 'this user'}?`}
+        confirmLabel="Remove"
+        loading={Boolean(userToDelete) && deletingUserId === userToDelete?.id}
+        onClose={() => setUserToDelete(null)}
+        onConfirm={handleUserDelete}
+      />
+
+      <ConfirmationDialog
+        open={Boolean(residentToDelete)}
+        title="Remove Resident"
+        message={`Are you sure you want to remove ${residentToDelete?.name || 'this resident'}?`}
+        confirmLabel="Remove"
+        loading={Boolean(residentToDelete) && deletingResidentId === residentToDelete?.id}
+        onClose={() => setResidentToDelete(null)}
+        onConfirm={handleResidentDelete}
+      />
     </main>
   );
 }

@@ -1,22 +1,22 @@
-const crypto = require('crypto');
-const { promisify } = require('util');
+import crypto from 'crypto';
+import { promisify } from 'util';
 
 const scrypt = promisify(crypto.scrypt);
 const TOKEN_VERSION = 1;
 const HASH_PREFIX = 'scrypt';
 const TOKEN_TTL_MS = 1000 * 60 * 60 * 12;
 
-function isPasswordHashed(value) {
+export const isPasswordHashed = (value) => {
   return typeof value === 'string' && value.startsWith(`${HASH_PREFIX}$`);
-}
+};
 
-async function hashPassword(password) {
+export const hashPassword = async (password) => {
   const salt = crypto.randomBytes(16).toString('hex');
   const derivedKey = await scrypt(String(password), salt, 64);
   return `${HASH_PREFIX}$${salt}$${derivedKey.toString('hex')}`;
-}
+};
 
-async function verifyPassword(password, storedPassword) {
+export const verifyPassword = async (password, storedPassword) => {
   if (!storedPassword) {
     return false;
   }
@@ -34,13 +34,13 @@ async function verifyPassword(password, storedPassword) {
   }
 
   return crypto.timingSafeEqual(expectedBuffer, derivedKey);
-}
+};
 
-function signToken(payload, secret) {
+const signToken = (payload, secret) => {
   return crypto.createHmac('sha256', secret).update(payload).digest('base64url');
-}
+};
 
-function createAuthToken(user, secret) {
+export const createAuthToken = (user, secret) => {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
   const issuedAt = Date.now();
   const body = Buffer.from(JSON.stringify({
@@ -55,9 +55,9 @@ function createAuthToken(user, secret) {
   const signature = signToken(`${header}.${body}`, secret);
 
   return `${header}.${body}.${signature}`;
-}
+};
 
-function verifyAuthToken(token, secret) {
+export const verifyAuthToken = (token, secret) => {
   if (!token || typeof token !== 'string') {
     return null;
   }
@@ -91,12 +91,4 @@ function verifyAuthToken(token, secret) {
   } catch (error) {
     return null;
   }
-}
-
-module.exports = {
-  createAuthToken,
-  hashPassword,
-  isPasswordHashed,
-  verifyAuthToken,
-  verifyPassword,
 };

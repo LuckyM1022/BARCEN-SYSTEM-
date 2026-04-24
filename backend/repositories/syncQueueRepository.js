@@ -1,4 +1,4 @@
-const { ObjectId } = require('mongodb');
+import { ObjectId } from "mongodb";
 
 function normalizeDocumentId(value) {
   if (value instanceof ObjectId) {
@@ -141,6 +141,6 @@ function createSyncQueueRepository(db) {
   };
 }
 
-module.exports = {
+export {
   createSyncQueueRepository,
 };

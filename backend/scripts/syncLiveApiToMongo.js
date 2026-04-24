@@ -1,7 +1,7 @@
-const fs = require('fs');
-const path = require('path');
-const { MongoClient, ObjectId } = require('mongodb');
-const { hashPassword, isPasswordHashed } = require('../lib/security');
+import fs from 'fs'
+import path from 'path'
+import { MongoClient, ObjectId } from 'mongodb';
+import { hashPassword, isPasswordHased } from '../lib/security.js'
 
 loadEnvFile();
 

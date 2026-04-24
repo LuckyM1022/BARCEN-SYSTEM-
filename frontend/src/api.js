@@ -1,10 +1,7 @@
 import { clearCurrentUser, getAuthToken } from './auth';
 
 const configuredApiBaseUrl = process.env.REACT_APP_API_BASE_URL?.trim();
-const API_BASE_URL = (configuredApiBaseUrl || `http://${window.location.hostname}:4000`).replace(
-  /\/$/,
-  ''
-);
+const API_BASE_URL = configuredApiBaseUrl ? configuredApiBaseUrl.replace(/\/$/, '') : '';
 
 export async function apiRequest(path, options = {}) {
   const token = getAuthToken();
@@ -21,9 +18,7 @@ export async function apiRequest(path, options = {}) {
       ...options,
     });
   } catch (error) {
-    throw new Error(
-      'Could not reach the backend API. Check that the backend server is running and that REACT_APP_API_BASE_URL points to the correct host.'
-    );
+    throw new Error('Could not reach the backend API. Check that the backend server is running.');
   }
 
   const data = await response.json().catch(() => ({}));

@@ -1,4 +1,4 @@
-const { MongoClient } = require('mongodb');
+import { MongoClient } from 'mongodb';
 
 function isConnectivityError(error) {
   const errorMsg = String(error?.message || error).toLowerCase();
@@ -43,6 +43,121 @@ function createAtlasSyncService(repositories, options = {}) {
     return atlasDb;
   }
 
+  async function listCollection(collectionName, sort = {}) {
+    if (!enabled || !atlasUri) {
+      return [];
+    }
+
+    try {
+      const targetDb = await getAtlasDb();
+      return await targetDb.collection(collectionName).find({}).sort(sort).toArray();
+    } catch (error) {
+      lastError = `Atlas read failed: ${error.message}`;
+
+      if (isConnectivityError(error)) {
+        await closeAtlasConnection();
+        return [];
+      }
+
+      throw error;
+    }
+  }
+
+  async function countCollection(collectionName, query = {}) {
+    if (!enabled || !atlasUri) {
+      return 0;
+    }
+
+    try {
+      const targetDb = await getAtlasDb();
+      return await targetDb.collection(collectionName).countDocuments(query);
+    } catch (error) {
+      lastError = `Atlas read failed: ${error.message}`;
+
+      if (isConnectivityError(error)) {
+        await closeAtlasConnection();
+        return 0;
+      }
+
+      throw error;
+    }
+  }
+
+  async function paginateCollection(collectionName, options = {}) {
+    const {
+      page = 0,
+      pageSize = 10,
+      query = {},
+      sort = {},
+    } = options;
+    const normalizedPage = Math.max(0, Number(page) || 0);
+    const normalizedPageSize = Math.max(1, Number(pageSize) || 10);
+
+    if (!enabled || !atlasUri) {
+      return {
+        items: [],
+        page: normalizedPage,
+        pageSize: normalizedPageSize,
+        totalCount: 0,
+      };
+    }
+
+    try {
+      const targetDb = await getAtlasDb();
+      const collection = targetDb.collection(collectionName);
+      const [items, totalCount] = await Promise.all([
+        collection
+          .find(query)
+          .sort(sort)
+          .skip(normalizedPage * normalizedPageSize)
+          .limit(normalizedPageSize)
+          .toArray(),
+        collection.countDocuments(query),
+      ]);
+
+      return {
+        items,
+        page: normalizedPage,
+        pageSize: normalizedPageSize,
+        totalCount,
+      };
+    } catch (error) {
+      lastError = `Atlas read failed: ${error.message}`;
+
+      if (isConnectivityError(error)) {
+        await closeAtlasConnection();
+        return {
+          items: [],
+          page: normalizedPage,
+          pageSize: normalizedPageSize,
+          totalCount: 0,
+        };
+      }
+
+      throw error;
+    }
+  }
+
+  async function findOne(collectionName, query = {}, sort = {}) {
+    if (!enabled || !atlasUri) {
+      return null;
+    }
+
+    try {
+      const targetDb = await getAtlasDb();
+      return await targetDb.collection(collectionName).findOne(query, { sort });
+    } catch (error) {
+      lastError = `Atlas read failed: ${error.message}`;
+
+      if (isConnectivityError(error)) {
+        await closeAtlasConnection();
+        return null;
+      }
+
+      throw error;
+    }
+  }
+
   async function applyQueueItem(item, targetDb) {
     const targetCollection = targetDb.collection(item.collectionName);
     if (item.action === 'delete') {
@@ -54,6 +169,17 @@ function createAtlasSyncService(repositories, options = {}) {
       item.document,
       { upsert: true }
     );
+  }
+
+  async function markLocalDocumentSynced(collectionName, documentId, syncedAt) {
+    if (collectionName === 'censusRecords') {
+      await repositories.census.markAtlasSynced(documentId, syncedAt);
+      return;
+    }
+
+    if (collectionName === 'residents') {
+      await repositories.residents.markAtlasSynced(documentId, syncedAt);
+    }
   }
 
   async function syncOnce() {
@@ -87,6 +213,9 @@ function createAtlasSyncService(repositories, options = {}) {
 
         try {
           await applyQueueItem(item, targetDb);
+          if (item.action === 'upsert' && item.documentId) {
+            await markLocalDocumentSynced(item.collectionName, item.documentId, new Date());
+          }
           await repositories.syncQueue.remove(item._id);
           lastError = null;
           lastSyncAt = new Date();
@@ -125,7 +254,7 @@ function createAtlasSyncService(repositories, options = {}) {
 
       if (!retryableItems.length) return;
 
-      console.log(`🔄 Retrying ${retryableItems.length} failed sync items...`);
+      console.log(`Retrying ${retryableItems.length} failed sync items...`);
 
       // Reset failed items to pending for retry
       for (const item of retryableItems) {
@@ -187,8 +316,12 @@ function createAtlasSyncService(repositories, options = {}) {
       };
     },
 
+    listCollection,
+    countCollection,
+    findOne,
+    paginateCollection,
     syncOnce,
   };
 }
 
-module.exports = { createAtlasSyncService };
+export { createAtlasSyncService };

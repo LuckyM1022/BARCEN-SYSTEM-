@@ -1,3 +1,5 @@
+import { ObjectId } from 'mongodb';
+
 function createCensusRepository(db, syncQueue) {
   const collection = db.collection('censusRecords');
 
@@ -20,9 +22,15 @@ function createCensusRepository(db, syncQueue) {
 
       return result;
     },
+    async markAtlasSynced(recordId, syncedAt = new Date()) {
+      await collection.updateOne(
+        { _id: new ObjectId(recordId) },
+        { $set: { atlasSyncedAt: syncedAt } }
+      );
+    },
   };
 }
 
-module.exports = {
+export {
   createCensusRepository,
 };
